@@ -419,14 +419,14 @@ function sendLikeReaction(messageId) {
  * @returns {void}
  */
 function sendReaction(messageId, emoji) {
-    const numericMessageId = Number(messageId);
-    if (ws?.readyState !== WebSocket.OPEN || Number.isNaN(numericMessageId)) {
+    const finalId = messageId;
+    if (ws?.readyState !== WebSocket.OPEN || finalId === undefined || finalId === null || String(finalId).length === 0) {
         return;
     }
 
     const likePayload = {
         type: "like",
-        message_id: numericMessageId,
+        message_id: finalId,
         sender: currentUser,
         emoji: emoji || "❤️",
     };
@@ -522,7 +522,8 @@ function bindReactionPickerInteractions() {
             e.preventDefault();
             console.log("[EVENT] Double tap detected on ID:", messageId);
 
-            const payload = { type: 'like', message_id: Number(messageId), sender: currentUser, emoji: '❤️' };
+            const finalId = bubble.getAttribute('data-id');
+            const payload = { type: 'like', message_id: finalId, sender: currentUser, emoji: '❤️' };
             console.log('[WS SEND]', payload);
             if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(payload));
         } else {
@@ -565,7 +566,10 @@ function bindReactionPickerInteractions() {
         if (e.target.tagName.toLowerCase() === 'span') {
             const emoji = e.target.textContent;
             if (activeMessageId) {
-                const payload = { type: 'like', message_id: Number(activeMessageId), sender: currentUser, emoji: emoji };
+                // Try to resolve the bubble and use its raw data-id value
+                const bubble = document.querySelector(`.message-bubble[data-id="${activeMessageId}"]`);
+                const finalId = bubble ? bubble.getAttribute('data-id') : activeMessageId;
+                const payload = { type: 'like', message_id: finalId, sender: currentUser, emoji: emoji };
                 console.log('[WS SEND]', payload);
                 if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(payload));
                 picker.classList.remove('visible');
@@ -588,7 +592,6 @@ function bindReactionPickerInteractions() {
  * @returns {void}
  */
 function renderMessage(msg) {
-    console.log("[DOM] Bubble created with ID:", msg?.id);
     const container = document.getElementById("messagesContainer");
     if (!container) return;
 
@@ -607,9 +610,10 @@ function renderMessage(msg) {
 
     const bubbleDiv = document.createElement("div");
     bubbleDiv.className = "message-bubble";
-    // Always set a data-id attribute so DOM lookups are reliable later
-    bubbleDiv.setAttribute('data-id', String(messageId ?? ""));
+    // Ensure data-id is set immediately (use raw msg.id)
+    bubbleDiv.setAttribute('data-id', msg.id);
     bubbleDiv.setAttribute('data-reactions', JSON.stringify(reactions || {}));
+    console.log('[DOM] Bubble created with ID:', msg.id);
     bubbleDiv.innerHTML = formatMessage(cleanText);
 
     // Apply badge immediately if reactions exist
