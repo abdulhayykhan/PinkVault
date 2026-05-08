@@ -205,12 +205,11 @@ function handleWebSocketMessage(event) {
             }
 
             if (!badge) {
-                badge = document.createElement('div');
-                badge.className = 'reaction-badge';
-                bubble.appendChild(badge);
+                // Create badge using insertAdjacentHTML to ensure it's inside the bubble
+                bubble.insertAdjacentHTML('beforeend', `<div class="reaction-badge">${emojis}</div>`);
+            } else {
+                badge.textContent = emojis;
             }
-
-            badge.textContent = emojis;
             return;
         }
 
@@ -533,8 +532,9 @@ function bindReactionPickerInteractions() {
                 activeMessageId = messageId;
                 try { if (navigator.vibrate) navigator.vibrate(50); } catch(err){}
 
-                picker.style.left = e.pageX + 'px';
-                picker.style.top = (e.pageY - 50) + 'px';
+                picker.style.position = 'fixed';
+                picker.style.left = `${e.clientX}px`;
+                picker.style.top = `${e.clientY - 60}px`;
                 picker.classList.add('visible');
             }, 500);
         }
@@ -556,8 +556,9 @@ function bindReactionPickerInteractions() {
         console.log('[EVENT] Right-click detected on ID:', messageId);
         activeMessageId = messageId;
 
-        picker.style.left = e.pageX + 'px';
-        picker.style.top = (e.pageY - 50) + 'px';
+        picker.style.position = 'fixed';
+        picker.style.left = `${e.clientX}px`;
+        picker.style.top = `${e.clientY - 60}px`;
         picker.classList.add('visible');
     });
 

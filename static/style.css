@@ -125,6 +125,7 @@ html, body {
     font-size: 0.95rem;
     touch-action: manipulation;
     animation: slideIn 0.3s ease-out;
+    overflow: visible !important;
 }
 
 .message-bubble a {
@@ -154,19 +155,16 @@ html, body {
     border-radius: 30px;
     box-shadow: 0 4px 15px rgba(0,0,0,0.15);
     padding: 8px 12px;
-    display: flex;
+    display: none;
     gap: 12px;
-    z-index: 1000;
-    opacity: 0;
-    pointer-events: none;
-    transform: scale(0.9);
-    transition: all 0.2s ease;
+    z-index: 9999 !important;
+    transition: all 0.15s ease;
 }
 
-#emoji-picker.visible {
+.visible {
+    display: flex !important;
     opacity: 1;
     pointer-events: auto;
-    transform: scale(1);
 }
 
 #emoji-picker span {
