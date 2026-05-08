@@ -26,6 +26,9 @@ let isConnected = false;
 let reconnectTimerId = null;
 let activeMessageId = null;
 let touchPressTimerId = null;
+// Track last tap for double-tap (300ms) detection
+let lastTapTimestamp = 0;
+let lastTapMessageId = null;
 
 // ============================================================================
 // Encryption Functions
@@ -184,7 +187,34 @@ function handleWebSocketMessage(event) {
         }
 
         if (data.type === "like") {
-            updateReactionBadge(data.message_id, data.reactions || {});
+            try {
+                const bubbleDiv = document.querySelector(`[data-id="${data.message_id}"]`);
+                const reactions = data.reactions || {};
+                if (!bubbleDiv) {
+                    return;
+                }
+
+                const hasReactions = reactions && typeof reactions === 'object' && Object.keys(reactions).length > 0;
+
+                if (!hasReactions) {
+                    const existing = bubbleDiv.querySelector('.reaction-badge');
+                    if (existing) existing.remove();
+                    bubbleDiv.setAttribute('data-reactions', JSON.stringify({}));
+                    return;
+                }
+
+                let badge = bubbleDiv.querySelector('.reaction-badge');
+                const html = Object.values(reactions).join('');
+                if (!badge) {
+                    badge = document.createElement('span');
+                    badge.className = 'reaction-badge';
+                    bubbleDiv.appendChild(badge);
+                }
+                badge.innerHTML = html;
+                bubbleDiv.setAttribute('data-reactions', JSON.stringify(reactions));
+            } catch (err) {
+                console.error('Error applying like update:', err);
+            }
             return;
         }
 
@@ -517,6 +547,36 @@ function bindReactionPickerInteractions() {
         clearTimeout(touchPressTimerId);
     });
 
+    // Pointer-based double-tap detector (works for mouse and touch via pointer events).
+    // If the same message bubble is tapped twice within 300ms, send a heart like
+    // and prevent the long-press emoji picker from appearing.
+    chatContainer.addEventListener('pointerup', (event) => {
+        const bubbleDiv = getMessageBubbleFromTarget(event.target);
+        const messageId = bubbleDiv?.dataset?.id;
+        if (!messageId) return;
+
+        const now = Date.now();
+        if (lastTapMessageId === messageId && (now - lastTapTimestamp) <= 300) {
+            // Double-tap detected
+            clearTimeout(touchPressTimerId);
+            hideEmojiPicker();
+            try {
+                sendReaction(messageId, '❤️');
+            } catch (e) {
+                console.error('Failed to send double-tap reaction', e);
+            }
+            // Reset last tap tracking to avoid triple-tap triggering
+            lastTapTimestamp = 0;
+            lastTapMessageId = null;
+            event.preventDefault();
+            return;
+        }
+
+        // Record this tap for potential double-tap
+        lastTapTimestamp = now;
+        lastTapMessageId = messageId;
+    }, { passive: false });
+
     picker.addEventListener("click", (event) => {
         const target = event.target;
         if (!(target instanceof HTMLElement) || target.tagName !== "SPAN") {
@@ -567,10 +627,9 @@ function renderMessage(msg) {
 
     const bubbleDiv = document.createElement("div");
     bubbleDiv.className = "message-bubble";
-    if (messageId !== null && messageId !== undefined) {
-        bubbleDiv.dataset.id = String(messageId);
-        bubbleDiv.dataset.reactions = JSON.stringify(reactions);
-    }
+    // Always set a data-id attribute so DOM lookups are reliable later
+    bubbleDiv.setAttribute('data-id', String(messageId ?? ""));
+    bubbleDiv.setAttribute('data-reactions', JSON.stringify(reactions || {}));
     bubbleDiv.innerHTML = formatMessage(cleanText);
 
     syncReactionBadge(bubbleDiv, reactions);
