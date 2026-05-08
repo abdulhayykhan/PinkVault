@@ -276,6 +276,30 @@ function updateConnectionStatus(connected) {
 // ============================================================================
 
 /**
+ * Format a message by escaping HTML and converting URLs to clickable links.
+ *
+ * @param {string} text The raw message text.
+ * @returns {string} HTML-safe formatted text with clickable links.
+ */
+function formatMessage(text) {
+    if (!text || typeof text !== 'string') return '';
+
+    // Escape HTML to prevent XSS
+    let escaped = text
+        .replaceAll('&', '&amp;')
+        .replaceAll('<', '&lt;')
+        .replaceAll('>', '&gt;')
+        .replaceAll('"', '&quot;')
+        .replaceAll("'", '&#039;');
+
+    // Convert URLs to clickable links (regex replacement for pattern matching)
+    const urlRegex = /(https?:\/\/[^\s<>"]+)/g;
+    escaped = escaped.replace(urlRegex, '<a href="$1" target="_blank" rel="noopener noreferrer">$1</a>');
+
+    return escaped;
+}
+
+/**
  * Render a message bubble in the messages container.
  *
  * @param {string} sender The sender's identifier.
@@ -295,17 +319,10 @@ function renderMessage(sender, text) {
     const messageDiv = document.createElement("div");
     messageDiv.className = `message ${isSent ? "sent" : "received"}`;
 
-    const senderSpan = document.createElement("div");
-    senderSpan.className = "message-sender";
-    senderSpan.textContent = sender;
-
     const bubbleDiv = document.createElement("div");
     bubbleDiv.className = "message-bubble";
-    bubbleDiv.textContent = cleanText;
+    bubbleDiv.innerHTML = formatMessage(cleanText);
 
-    if (!isSent) {
-        messageDiv.appendChild(senderSpan);
-    }
     messageDiv.appendChild(bubbleDiv);
 
     container.appendChild(messageDiv);
@@ -424,6 +441,14 @@ function initializeApp() {
     if (savedKey && savedUser) {
         SYMMETRIC_KEY = savedKey;
         currentUser = savedUser.trim().toLowerCase();
+
+        // Set partner name in header
+        const partner = currentUser === 'abdi' ? 'alysha' : 'abdi';
+        const partnerNameElement = document.getElementById('partner-name');
+        if (partnerNameElement) {
+            partnerNameElement.textContent = partner.charAt(0).toUpperCase() + partner.slice(1);
+        }
+
         // show chat
         const loginContainer = document.getElementById('login-container');
         const chatContainer = document.getElementById('chat-container');
@@ -506,6 +531,13 @@ function handleUnlock(event) {
 
     SYMMETRIC_KEY = key;
     currentUser = username.toLowerCase();
+
+    // Determine the chat partner (two-person chat)
+    const partner = currentUser === 'abdi' ? 'alysha' : 'abdi';
+    const partnerNameElement = document.getElementById('partner-name');
+    if (partnerNameElement) {
+        partnerNameElement.textContent = partner.charAt(0).toUpperCase() + partner.slice(1);
+    }
 
     // Toggle UI
     const loginContainer = document.getElementById('login-container');
