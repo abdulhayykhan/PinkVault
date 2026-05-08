@@ -24,6 +24,8 @@ let reconnectAttempt = 0;
 let maxReconnectDelay = 30000; // 30 seconds
 let isConnected = false;
 let reconnectTimerId = null;
+let activeMessageId = null;
+let touchPressTimerId = null;
 
 // ============================================================================
 // Encryption Functions
@@ -330,7 +332,9 @@ function formatMessage(text) {
  */
 function syncReactionBadge(bubbleDiv, reactions) {
     const existingBadge = bubbleDiv.querySelector(".reaction-badge");
-    const hasReactions = reactions && typeof reactions === "object" && Object.keys(reactions).length > 0;
+    const reactionValues = reactions && typeof reactions === "object" ? Object.values(reactions) : [];
+    const primaryReaction = reactionValues.length > 0 ? reactionValues[0] : "";
+    const hasReactions = primaryReaction.length > 0;
 
     if (!hasReactions) {
         if (existingBadge) {
@@ -340,13 +344,13 @@ function syncReactionBadge(bubbleDiv, reactions) {
     }
 
     if (existingBadge) {
-        existingBadge.textContent = "❤️";
+        existingBadge.textContent = primaryReaction;
         return;
     }
 
     const badge = document.createElement("span");
     badge.className = "reaction-badge";
-    badge.textContent = "❤️";
+    badge.textContent = primaryReaction;
     bubbleDiv.appendChild(badge);
 }
 
@@ -378,6 +382,17 @@ function updateReactionBadge(messageId, reactions) {
  * @returns {void}
  */
 function sendLikeReaction(messageId) {
+    sendReaction(messageId, "❤️");
+}
+
+/**
+ * Send an emoji reaction for a specific message id.
+ *
+ * @param {number|string} messageId The message id to react to.
+ * @param {string} emoji The emoji to send.
+ * @returns {void}
+ */
+function sendReaction(messageId, emoji) {
     const numericMessageId = Number(messageId);
     if (ws?.readyState !== WebSocket.OPEN || Number.isNaN(numericMessageId)) {
         return;
@@ -387,78 +402,144 @@ function sendLikeReaction(messageId) {
         type: "like",
         message_id: numericMessageId,
         sender: currentUser,
+        emoji: emoji || "❤️",
     }));
 }
 
 /**
- * Create mutable timing state for a message bubble reaction detector.
+ * Hide the emoji picker.
  *
- * @returns {{ lastClickTime: number, lastTouchEndTime: number }}
- */
-function createDoubleTapState() {
-    return {
-        lastClickTime: 0,
-        lastTouchEndTime: 0,
-    };
-}
-
-/**
- * Handle touch interaction for the custom double-tap detector.
- *
- * @param {TouchEvent} event The touch event.
- * @param {{ lastClickTime: number, lastTouchEndTime: number }} state The timing state.
- * @param {number|string} messageId The message id to like.
  * @returns {void}
  */
-function handleReactionTouchEnd(event, state, messageId) {
-    const now = Date.now();
-
-    if (now - state.lastTouchEndTime <= 300) {
-        event.preventDefault();
-        sendLikeReaction(messageId);
-    }
-
-    state.lastTouchEndTime = now;
-}
-
-/**
- * Handle click interaction for the custom double-tap detector.
- *
- * @param {MouseEvent} event The click event.
- * @param {{ lastClickTime: number, lastTouchEndTime: number }} state The timing state.
- * @param {number|string} messageId The message id to like.
- * @returns {void}
- */
-function handleReactionClick(event, state, messageId) {
-    const now = Date.now();
-
-    if (now - state.lastTouchEndTime < 500) {
+function hideEmojiPicker() {
+    const picker = document.getElementById("emoji-picker");
+    if (!picker) {
         return;
     }
 
-    if (now - state.lastClickTime <= 300) {
-        event.preventDefault();
-        sendLikeReaction(messageId);
-    }
-
-    state.lastClickTime = now;
+    picker.classList.remove("visible");
+    picker.classList.add("hidden");
+    activeMessageId = null;
 }
 
 /**
- * Attach desktop and mobile double-tap listeners to a message bubble.
+ * Show the emoji picker near the pointer or touch position.
  *
- * @param {HTMLElement} bubbleDiv The bubble element to observe.
- * @param {number|string} messageId The message id to like.
+ * @param {number} x The x position.
+ * @param {number} y The y position.
+ * @param {number|string} messageId The message id to react to.
  * @returns {void}
  */
-function attachReactionListener(bubbleDiv, messageId) {
-    if (messageId === undefined || messageId === null) {
+function showEmojiPicker(x, y, messageId) {
+    const picker = document.getElementById("emoji-picker");
+    if (!picker) {
         return;
     }
 
-    const state = createDoubleTapState();
-    bubbleDiv.addEventListener("touchend", (event) => handleReactionTouchEnd(event, state, messageId), { passive: false });
-    bubbleDiv.addEventListener("click", (event) => handleReactionClick(event, state, messageId));
+    const pickerWidthEstimate = 280;
+    const pickerHeightEstimate = 56;
+    const left = Math.max(8, Math.min(x - pickerWidthEstimate / 2, globalThis.innerWidth - pickerWidthEstimate - 8));
+    const top = Math.max(8, y - pickerHeightEstimate - 12);
+
+    picker.style.left = `${left}px`;
+    picker.style.top = `${top}px`;
+    picker.classList.remove("hidden");
+    picker.classList.add("visible");
+    activeMessageId = messageId;
+}
+
+/**
+ * Extract the message bubble from an event target.
+ *
+ * @param {EventTarget | null} target The event target.
+ * @returns {HTMLElement | null}
+ */
+function getMessageBubbleFromTarget(target) {
+    if (!(target instanceof HTMLElement)) {
+        return null;
+    }
+
+    return target.closest(".message-bubble");
+}
+
+/**
+ * Register the emoji picker interactions.
+ *
+ * @returns {void}
+ */
+function bindReactionPickerInteractions() {
+    const chatContainer = document.getElementById("chat-container");
+    const picker = document.getElementById("emoji-picker");
+    if (!chatContainer || !picker) {
+        return;
+    }
+
+    chatContainer.addEventListener("contextmenu", (event) => {
+        const bubbleDiv = getMessageBubbleFromTarget(event.target);
+        const messageId = bubbleDiv?.dataset?.id;
+        if (!messageId) {
+            return;
+        }
+
+        event.preventDefault();
+        hideEmojiPicker();
+        showEmojiPicker(event.clientX, event.clientY, messageId);
+    });
+
+    chatContainer.addEventListener("touchstart", (event) => {
+        const bubbleDiv = getMessageBubbleFromTarget(event.target);
+        const touch = event.touches[0];
+        const messageId = bubbleDiv?.dataset?.id;
+
+        if (!messageId || !touch) {
+            return;
+        }
+
+        clearTimeout(touchPressTimerId);
+        touchPressTimerId = globalThis.setTimeout(() => {
+            hideEmojiPicker();
+            showEmojiPicker(touch.clientX, touch.clientY, messageId);
+            if (globalThis.navigator && "vibrate" in globalThis.navigator) {
+                globalThis.navigator.vibrate(50);
+            }
+        }, 500);
+    }, { passive: true });
+
+    chatContainer.addEventListener("touchend", () => {
+        clearTimeout(touchPressTimerId);
+    });
+
+    chatContainer.addEventListener("touchmove", () => {
+        clearTimeout(touchPressTimerId);
+    });
+
+    chatContainer.addEventListener("touchcancel", () => {
+        clearTimeout(touchPressTimerId);
+    });
+
+    picker.addEventListener("click", (event) => {
+        const target = event.target;
+        if (!(target instanceof HTMLElement) || target.tagName !== "SPAN") {
+            return;
+        }
+
+        if (activeMessageId === null) {
+            return;
+        }
+
+        const selectedEmoji = target.textContent || "❤️";
+        sendReaction(activeMessageId, selectedEmoji);
+        hideEmojiPicker();
+    });
+
+    document.addEventListener("click", (event) => {
+        const target = event.target;
+        if (target instanceof HTMLElement && target.closest("#emoji-picker")) {
+            return;
+        }
+
+        hideEmojiPicker();
+    });
 }
 
 /**
@@ -493,7 +574,6 @@ function renderMessage(msg) {
     bubbleDiv.innerHTML = formatMessage(cleanText);
 
     syncReactionBadge(bubbleDiv, reactions);
-    attachReactionListener(bubbleDiv, messageId);
 
     messageDiv.appendChild(bubbleDiv);
 
@@ -588,88 +668,97 @@ async function loadChatHistory() {
     }
 }
 
-    /**
-     * Update the header with the current chat partner.
-     *
-     * @param {string} username The authenticated username.
-     * @returns {void}
-     */
-    function updatePartnerName(username) {
-        const partner = username.toLowerCase() === 'abdi' ? 'Alysha' : 'Abdi';
-        const partnerNameElement = document.getElementById('partner-name');
-        if (partnerNameElement) {
-            partnerNameElement.textContent = partner;
-        }
+/**
+ * Update the header with the current chat partner.
+ *
+ * @param {string} username The authenticated username.
+ * @returns {void}
+ */
+function updatePartnerName(username) {
+    const partner = username.toLowerCase() === 'abdi' ? 'Alysha' : 'Abdi';
+    const partnerNameElement = document.getElementById('partner-name');
+    if (partnerNameElement) {
+        partnerNameElement.textContent = partner;
+    }
+}
+
+/**
+ * Wire the login controls.
+ *
+ * @returns {void}
+ */
+function wireLoginControls() {
+    const unlockButton = document.getElementById('unlock-button');
+    if (unlockButton) {
+        unlockButton.addEventListener('click', handleUnlock);
     }
 
-    /**
-     * Wire the login controls.
-     *
-     * @returns {void}
-     */
-    function wireLoginControls() {
-        const unlockButton = document.getElementById('unlock-button');
-        if (unlockButton) {
-            unlockButton.addEventListener('click', handleUnlock);
-        }
+    const vaultKeyInput = document.getElementById('vault-key-input');
+    if (vaultKeyInput) {
+        vaultKeyInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                handleUnlock(e);
+            }
+        });
+    }
+}
 
-        const vaultKeyInput = document.getElementById('vault-key-input');
-        if (vaultKeyInput) {
-            vaultKeyInput.addEventListener('keypress', (e) => {
-                if (e.key === 'Enter') {
-                    handleUnlock(e);
-                }
-            });
-        }
+/**
+ * Restore a saved chat session if one exists.
+ *
+ * @returns {boolean} True when chat was restored, otherwise false.
+ */
+function restoreSavedSession() {
+    const savedKey = sessionStorage.getItem('vaultKey');
+    const savedUser = localStorage.getItem('username');
+
+    const loginContainer = document.getElementById('login-container');
+    const chatContainer = document.getElementById('chat-container');
+
+    if (savedKey && savedUser) {
+        SYMMETRIC_KEY = savedKey;
+        currentUser = savedUser.trim().toLowerCase();
+        updatePartnerName(currentUser);
+
+        if (loginContainer) loginContainer.style.display = 'none';
+        if (chatContainer) chatContainer.style.display = '';
+
+        setupUser();
+        loadChatHistory();
+        connect();
+        return true;
     }
 
-    /**
-     * Restore a saved chat session if one exists.
-     *
-     * @returns {boolean} True when chat was restored, otherwise false.
-     */
-    function restoreSavedSession() {
-        const savedKey = sessionStorage.getItem('vaultKey');
-        const savedUser = localStorage.getItem('username');
+    if (loginContainer) loginContainer.style.display = '';
+    if (chatContainer) chatContainer.style.display = 'none';
+    return false;
+}
 
-        const loginContainer = document.getElementById('login-container');
-        const chatContainer = document.getElementById('chat-container');
-
-        if (savedKey && savedUser) {
-            SYMMETRIC_KEY = savedKey;
-            currentUser = savedUser.trim().toLowerCase();
-            updatePartnerName(currentUser);
-
-            if (loginContainer) loginContainer.style.display = 'none';
-            if (chatContainer) chatContainer.style.display = '';
-
-            setupUser();
-            loadChatHistory();
-            connect();
-            return true;
-        }
-
-        if (loginContainer) loginContainer.style.display = '';
-        if (chatContainer) chatContainer.style.display = 'none';
-        return false;
+/**
+ * Wire the composer controls.
+ *
+ * @returns {void}
+ */
+function wireComposerControls() {
+    const sendButton = document.getElementById('sendButton');
+    if (sendButton) {
+        sendButton.addEventListener('click', handleSendButtonClick);
     }
 
-    /**
-     * Wire the composer controls.
-     *
-     * @returns {void}
-     */
-    function wireComposerControls() {
-        const sendButton = document.getElementById('sendButton');
-        if (sendButton) {
-            sendButton.addEventListener('click', handleSendButtonClick);
-        }
-
-        const messageInput = document.getElementById('messageInput');
-        if (messageInput) {
-            messageInput.addEventListener('keypress', handleMessageInputKeyPress);
-        }
+    const messageInput = document.getElementById('messageInput');
+    if (messageInput) {
+        messageInput.addEventListener('keypress', handleMessageInputKeyPress);
     }
+}
+
+/**
+ * Wire emoji picker interactions.
+ *
+ * @returns {void}
+ */
+function wireReactionControls() {
+    bindReactionPickerInteractions();
+}
 
 // ============================================================================
 // Event Listeners & Initialization
@@ -684,6 +773,7 @@ function initializeApp() {
     wireLoginControls();
     restoreSavedSession();
     wireComposerControls();
+    wireReactionControls();
 }
 
 /**
@@ -741,12 +831,7 @@ function handleUnlock(event) {
     SYMMETRIC_KEY = key;
     currentUser = username.toLowerCase();
 
-    // Determine the chat partner (two-person chat)
-    const partner = currentUser === 'abdi' ? 'alysha' : 'abdi';
-    const partnerNameElement = document.getElementById('partner-name');
-    if (partnerNameElement) {
-        partnerNameElement.textContent = partner.charAt(0).toUpperCase() + partner.slice(1);
-    }
+    updatePartnerName(currentUser);
 
     // Toggle UI
     const loginContainer = document.getElementById('login-container');

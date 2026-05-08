@@ -166,7 +166,7 @@ async def save_message(sender: str, encrypted_text: str) -> dict[str, Any]:
         return {}
 
 
-async def toggle_message_reaction(message_id: int, sender: str) -> dict[str, Any]:
+async def toggle_message_reaction(message_id: int, sender: str, emoji: str) -> dict[str, Any]:
     """Toggle a sender's reaction for a stored message.
 
     Args:
@@ -191,10 +191,10 @@ async def toggle_message_reaction(message_id: int, sender: str) -> dict[str, Any
         if not isinstance(reactions, dict):
             reactions = {}
 
-        if sender in reactions:
+        if reactions.get(sender) == emoji:
             reactions.pop(sender, None)
         else:
-            reactions[sender] = "❤️"
+            reactions[sender] = emoji
 
         await asyncio.to_thread(
             lambda: supabase_client.table("messages").update({
@@ -217,13 +217,17 @@ async def handle_chat_payload(message_payload: dict[str, Any], authenticated_use
 
     if payload_type == "like":
         message_id_raw = message_payload.get("message_id")
+        sender = str(message_payload.get("sender", authenticated_user)).strip().lower()
+        if sender != authenticated_user:
+            sender = authenticated_user
 
         try:
             message_id = int(message_id_raw)
         except (TypeError, ValueError):
             return
 
-        updated_message = await toggle_message_reaction(message_id, authenticated_user)
+        emoji = str(message_payload.get("emoji", "❤️"))
+        updated_message = await toggle_message_reaction(message_id, sender, emoji)
         if not updated_message:
             return
 

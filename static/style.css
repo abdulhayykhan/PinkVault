@@ -119,6 +119,8 @@ html, body {
     word-wrap: break-word;
     white-space: pre-wrap;
     overflow-wrap: break-word;
+    user-select: none;
+    -webkit-user-select: none;
     line-height: 1.4;
     font-size: 0.95rem;
     touch-action: manipulation;
@@ -148,6 +150,44 @@ html, body {
     line-height: 1;
     box-shadow: 0 4px 10px rgba(0, 0, 0, 0.12);
     animation: reactionPop 0.2s ease-out;
+}
+
+#emoji-picker {
+    position: fixed;
+    background: white;
+    border-radius: 30px;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.15);
+    padding: 8px 12px;
+    display: flex;
+    gap: 12px;
+    z-index: 1000;
+    opacity: 0;
+    pointer-events: none;
+    transform: scale(0.9);
+    transition: all 0.2s ease;
+}
+
+#emoji-picker.visible {
+    opacity: 1;
+    pointer-events: auto;
+    transform: scale(1);
+}
+
+#emoji-picker span {
+    font-size: 24px;
+    cursor: pointer;
+    transition: transform 0.15s ease;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+
+#emoji-picker span:hover {
+    transform: scale(1.2);
+}
+
+.hidden {
+    display: none !important;
 }
 
 @keyframes reactionPop {
