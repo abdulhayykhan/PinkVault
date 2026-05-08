@@ -10,8 +10,8 @@
  * key provisioning mechanism for production deployments.
  */
 
-// Backend override URL (set to your Render backend in production)
-const BACKEND_URL = ""; // e.g. 'wss://your-backend.onrender.com'
+// Remote backend domain for Netlify frontend to connect to Render API
+const BACKEND_DOMAIN = "pinkvault.onrender.com";
 
 // ============================================================================
 // Configuration
@@ -110,12 +110,7 @@ function decryptMessage(ciphertext) {
  * @returns {string} The absolute WebSocket endpoint URL.
  */
 function buildWebSocketUrl() {
-    if (typeof BACKEND_URL === "string" && BACKEND_URL.trim().length > 0) {
-        return BACKEND_URL.replace(/\/+$/, "") + "/ws";
-    }
-
-    const protocol = globalThis.location.protocol === "https:" ? "wss:" : "ws:";
-    return `${protocol}//${globalThis.location.host}/ws`;
+    return 'wss://' + BACKEND_DOMAIN + '/ws';
 }
 
 // ============================================================================
@@ -139,8 +134,7 @@ function connect() {
         }
     }
 
-    const protocol = globalThis.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const wsUrl = `${protocol}//${globalThis.location.host}/ws`;
+    const wsUrl = 'wss://' + BACKEND_DOMAIN + '/ws';
 
     try {
         ws = new WebSocket(wsUrl);
@@ -367,7 +361,7 @@ function sendMessage() {
  */
 async function loadChatHistory() {
     try {
-        const response = await fetch("/history");
+        const response = await fetch('https://' + BACKEND_DOMAIN + '/history');
         if (!response.ok) {
             console.error("Failed to fetch chat history");
             return;
