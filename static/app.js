@@ -443,10 +443,10 @@ function initializeApp() {
         currentUser = savedUser.trim().toLowerCase();
 
         // Set partner name in header
-        const partner = currentUser === 'abdi' ? 'alysha' : 'abdi';
+        const partner = currentUser.toLowerCase() === 'abdi' ? 'Alysha' : 'Abdi';
         const partnerNameElement = document.getElementById('partner-name');
         if (partnerNameElement) {
-            partnerNameElement.textContent = partner.charAt(0).toUpperCase() + partner.slice(1);
+            partnerNameElement.textContent = partner;
         }
 
         // show chat
