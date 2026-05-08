@@ -37,13 +37,20 @@ self.addEventListener('activate', event => {
     );
 });
 
-// Fetch event: Cache-first strategy
+// Fetch event: Network-first for APIs, Cache-first for static assets
 self.addEventListener('fetch', event => {
-    // Skip non-GET requests
-    if (event.request.method !== 'GET') {
+    // Network-only for API endpoints and non-GET requests
+    const url = event.request.url;
+    const isApiEndpoint = url.includes('/history') || url.includes('/ws');
+    const isNonGetRequest = event.request.method !== 'GET';
+
+    if (isApiEndpoint || isNonGetRequest) {
+        // Bypass cache entirely for API endpoints
+        event.respondWith(fetch(event.request));
         return;
     }
 
+    // Cache-first strategy for static assets (HTML, CSS, JS, images, etc.)
     event.respondWith(
         caches.match(event.request)
             .then(response => {
