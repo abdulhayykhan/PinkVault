@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=0">
+    <meta name="description" content="PinkVault - Real-time encrypted chat application">
+    <meta name="theme-color" content="#E8A8A8">
+    <title>PinkVault</title>
+
+    <!-- PWA manifest so the app can be installed like a native experience. -->
+    <link rel="manifest" href="manifest.json">
+
+    <!-- Site icons for browser tab and home screen. -->
+    <link rel="icon" type="image/png" href="/logo.png">
+    <link rel="apple-touch-icon" href="/logo.png">
+
+    <!-- Core chat styling for the mobile-first interface. -->
+    <link rel="stylesheet" href="style.css">
+
+    <!-- CryptoJS provides browser-side AES encryption for message payloads. -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.1.1/crypto-js.min.js"></script>
+</head>
+<body>
+    <!-- Login gate (shown before chat) -->
+    <div id="login-container" class="login-container">
+        <div class="login-card">
+            <img src="/logo.png" alt="PinkVault logo" class="login-logo">
+            <h2>Welcome to PinkVault</h2>
+            <input id="username-input" type="text" placeholder="Username" autocomplete="username">
+            <input id="vault-key-input" type="password" placeholder="Vault Key" autocomplete="current-password">
+            <button id="unlock-button" class="send-button">Unlock Vault</button>
+        </div>
+    </div>
+
+    <!-- Chat shell: header, scrollable message feed, and fixed composer bar. -->
+    <div id="chat-container" style="display: none;">
+    <div id="app" class="app-container">
+        <header class="chat-header">
+            <!-- Logo placed at root for static hosting on Netlify -->
+            <img src="/logo.png" alt="PinkVault logo" class="app-logo" style="height:32px;margin-right:8px;">
+            <h1>PinkVault</h1>
+            <span class="connection-status" id="connectionStatus">Connecting...</span>
+        </header>
+
+        <div class="messages-container" id="messagesContainer">
+            <!-- Messages will be inserted here dynamically -->
+        </div>
+
+        <footer class="input-bar">
+            <input 
+                type="text" 
+                id="messageInput" 
+                class="message-input" 
+                placeholder="Type a message..." 
+                autocomplete="off"
+            >
+            <button id="sendButton" class="send-button" aria-label="Send message">
+                <span>Send</span>
+            </button>
+        </footer>
+    </div>
+    </div>
+
+    <!-- Main chat client logic. -->
+    <script src="app.js"></script>
+</body>
+</html>

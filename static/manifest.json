@@ -1,0 +1,25 @@
+{
+  "name": "PinkVault",
+  "short_name": "PinkVault",
+  "description": "Real-time encrypted chat application",
+  "start_url": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "theme_color": "#E8A8A8",
+  "background_color": "#FDF1F1",
+  "scope": "/",
+  "icons": [
+    {
+      "src": "/logo.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/logo.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ]
+}
