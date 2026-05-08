@@ -181,40 +181,36 @@ function handleWebSocketOpen() {
 function handleWebSocketMessage(event) {
     try {
         const data = JSON.parse(event.data);
+        console.log("[WS RECV]", data);
 
         if (data.type === "ping") {
             return;
         }
 
         if (data.type === "like") {
-            try {
-                const bubbleDiv = document.querySelector(`[data-id="${data.message_id}"]`);
-                const reactions = data.reactions || {};
-                if (!bubbleDiv) {
-                    return;
-                }
-
-                const hasReactions = reactions && typeof reactions === 'object' && Object.keys(reactions).length > 0;
-
-                if (!hasReactions) {
-                    const existing = bubbleDiv.querySelector('.reaction-badge');
-                    if (existing) existing.remove();
-                    bubbleDiv.setAttribute('data-reactions', JSON.stringify({}));
-                    return;
-                }
-
-                let badge = bubbleDiv.querySelector('.reaction-badge');
-                const html = Object.values(reactions).join('');
-                if (!badge) {
-                    badge = document.createElement('span');
-                    badge.className = 'reaction-badge';
-                    bubbleDiv.appendChild(badge);
-                }
-                badge.innerHTML = html;
-                bubbleDiv.setAttribute('data-reactions', JSON.stringify(reactions));
-            } catch (err) {
-                console.error('Error applying like update:', err);
+            const bubble = document.querySelector(`.message-bubble[data-id="${data.message_id}"]`);
+            if (!bubble) {
+                console.error('Bubble not found for ID:', data.message_id);
+                return;
             }
+
+            const emojis = Object.values(data.reactions || {}).join('');
+            let badge = bubble.querySelector('.reaction-badge');
+
+            if (!emojis) {
+                if (badge) {
+                    badge.remove();
+                }
+                return;
+            }
+
+            if (!badge) {
+                badge = document.createElement('div');
+                badge.className = 'reaction-badge';
+                bubble.appendChild(badge);
+            }
+
+            badge.textContent = emojis;
             return;
         }
 
@@ -529,9 +525,7 @@ function bindReactionPickerInteractions() {
         touchPressTimerId = globalThis.setTimeout(() => {
             hideEmojiPicker();
             showEmojiPicker(touch.clientX, touch.clientY, messageId);
-            if (globalThis.navigator && "vibrate" in globalThis.navigator) {
-                globalThis.navigator.vibrate(50);
-            }
+            try { if (navigator.vibrate) navigator.vibrate(50); } catch(e) {}
         }, 500);
     }, { passive: true });
 
@@ -609,6 +603,7 @@ function bindReactionPickerInteractions() {
  * @returns {void}
  */
 function renderMessage(msg) {
+    console.log("[RENDER MSG]", msg);
     const container = document.getElementById("messagesContainer");
     if (!container) return;
 
@@ -632,7 +627,16 @@ function renderMessage(msg) {
     bubbleDiv.setAttribute('data-reactions', JSON.stringify(reactions || {}));
     bubbleDiv.innerHTML = formatMessage(cleanText);
 
-    syncReactionBadge(bubbleDiv, reactions);
+    // Apply badge immediately if reactions exist
+    if (reactions && typeof reactions === 'object' && Object.keys(reactions).length > 0) {
+        const emojis = Object.values(reactions).join('');
+        if (emojis) {
+            const badge = document.createElement('div');
+            badge.className = 'reaction-badge';
+            badge.textContent = emojis;
+            bubbleDiv.appendChild(badge);
+        }
+    }
 
     messageDiv.appendChild(bubbleDiv);
 
