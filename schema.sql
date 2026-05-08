@@ -10,3 +10,6 @@ CREATE TABLE IF NOT EXISTS messages (
 
 -- 2. Create an index to speed up the /history endpoint queries
 CREATE INDEX IF NOT EXISTS idx_messages_timestamp ON messages(timestamp DESC);
+
+-- 3. Add a reactions column to store message reactions
+ALTER TABLE messages ADD COLUMN reactions JSONB DEFAULT '{}'::jsonb;

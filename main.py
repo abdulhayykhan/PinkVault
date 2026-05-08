@@ -113,10 +113,6 @@ class ConnectionManager:
 # Global connection manager instance
 manager = ConnectionManager()
 
-# Track background database writes so the event loop keeps a strong reference.
-background_tasks: set[asyncio.Task[None]] = set()
-
-
 async def keep_alive(websocket: WebSocket) -> None:
     """Send periodic ping messages to keep a WebSocket alive.
 
@@ -139,7 +135,7 @@ async def keep_alive(websocket: WebSocket) -> None:
         pass
 
 
-async def save_message(sender: str, encrypted_text: str) -> None:
+async def save_message(sender: str, encrypted_text: str) -> dict[str, Any]:
     """Insert a chat message into the Supabase messages table.
 
     Args:
@@ -147,21 +143,112 @@ async def save_message(sender: str, encrypted_text: str) -> None:
         encrypted_text: The encrypted message body.
 
     Returns:
-        None
+        The inserted row, including the generated id and reactions payload.
 
     Raises:
         Exception: Any database error is caught and logged locally.
     """
-    await asyncio.sleep(0)
     try:
-        await asyncio.to_thread(
+        response = await asyncio.to_thread(
             lambda: supabase_client.table("messages").insert({
                 "sender": sender,
                 "encrypted_text": encrypted_text,
-            }).execute()
+            }).select("id,sender,encrypted_text,reactions").execute()
         )
+        rows = response.data if response.data else []
+        if isinstance(rows, list) and rows:
+            return rows[0]
+        if isinstance(rows, dict):
+            return rows
+        return {}
     except Exception as error:
         print(f"Error saving message to database: {str(error)}")
+        return {}
+
+
+async def toggle_message_reaction(message_id: int, sender: str) -> dict[str, Any]:
+    """Toggle a sender's reaction for a stored message.
+
+    Args:
+        message_id: The Supabase row id for the message.
+        sender: The authenticated sender username.
+
+    Returns:
+        A dictionary containing the message id and the updated reactions map.
+    """
+    try:
+        response = await asyncio.to_thread(
+            lambda: supabase_client.table("messages").select(
+                "id,reactions"
+            ).eq("id", message_id).limit(1).execute()
+        )
+        rows = response.data if response.data else []
+        if not rows:
+            return {}
+
+        message_row = rows[0] if isinstance(rows, list) else rows
+        reactions = message_row.get("reactions") if isinstance(message_row, dict) else {}
+        if not isinstance(reactions, dict):
+            reactions = {}
+
+        if sender in reactions:
+            reactions.pop(sender, None)
+        else:
+            reactions[sender] = "❤️"
+
+        await asyncio.to_thread(
+            lambda: supabase_client.table("messages").update({
+                "reactions": reactions,
+            }).eq("id", message_id).execute()
+        )
+
+        return {
+            "id": message_row.get("id", message_id) if isinstance(message_row, dict) else message_id,
+            "reactions": reactions,
+        }
+    except Exception as error:
+        print(f"Error updating message reactions: {str(error)}")
+        return {}
+
+
+async def handle_chat_payload(message_payload: dict[str, Any], authenticated_user: str) -> None:
+    """Process a WebSocket payload for a message or reaction."""
+    payload_type = str(message_payload.get("type", "message")).strip().lower()
+
+    if payload_type == "like":
+        message_id_raw = message_payload.get("message_id")
+
+        try:
+            message_id = int(message_id_raw)
+        except (TypeError, ValueError):
+            return
+
+        updated_message = await toggle_message_reaction(message_id, authenticated_user)
+        if not updated_message:
+            return
+
+        await manager.broadcast(json.dumps({
+            "type": "like",
+            "message_id": updated_message.get("id", message_id),
+            "reactions": updated_message.get("reactions", {}),
+        }))
+        return
+
+    sender = str(message_payload.get("sender", authenticated_user)).strip().lower()
+    encrypted_text = str(message_payload.get("text", ""))
+
+    if sender != authenticated_user:
+        sender = authenticated_user
+
+    saved_message = await save_message(sender, encrypted_text)
+
+    await manager.broadcast(json.dumps({
+        "type": "message",
+        "id": saved_message.get("id"),
+        "sender": sender,
+        "text": encrypted_text,
+        "reactions": saved_message.get("reactions", {}),
+    }))
 
 
 @app.get("/health")
@@ -189,7 +276,9 @@ async def fetch_chat_history() -> list[dict[str, Any]]:
     await asyncio.sleep(0)
     try:
         response = await asyncio.to_thread(
-            lambda: supabase_client.table("messages").select("*").order(
+            lambda: supabase_client.table("messages").select(
+                "id,sender,encrypted_text,reactions,timestamp"
+            ).order(
                 "timestamp", desc=False
             ).limit(50).execute()
         )
@@ -256,18 +345,10 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
 
             try:
                 message_payload = json.loads(data)
-                sender = str(message_payload.get("sender", authenticated_user)).strip().lower()
-                encrypted_text = str(message_payload.get("text", ""))
-
-                if sender != authenticated_user:
-                    sender = authenticated_user
-
-                await manager.broadcast(json.dumps({"sender": sender, "text": encrypted_text}))
-                save_task = asyncio.create_task(save_message(sender, encrypted_text))
-                background_tasks.add(save_task)
-                save_task.add_done_callback(background_tasks.discard)
             except json.JSONDecodeError:
                 continue
+
+            await handle_chat_payload(message_payload, authenticated_user)
 
     except WebSocketDisconnect:
         pass

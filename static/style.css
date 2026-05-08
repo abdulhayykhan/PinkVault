@@ -69,8 +69,8 @@ html, body {
 }
 
 .connection-status.online {
-    color: #4CAF50;
-    background-color: rgba(76, 175, 80, 0.1);
+    color: #FFFFFF;
+    background-color: #2E7D32;
 }
 
 /* Messages Container */
@@ -112,6 +112,7 @@ html, body {
 }
 
 .message-bubble {
+    position: relative;
     max-width: 80%;
     padding: 0.75rem 1rem;
     border-radius: 18px;
@@ -120,6 +121,7 @@ html, body {
     overflow-wrap: break-word;
     line-height: 1.4;
     font-size: 0.95rem;
+    touch-action: manipulation;
     animation: slideIn 0.3s ease-out;
 }
 
@@ -128,6 +130,35 @@ html, body {
     text-decoration: underline;
     font-weight: 600;
     cursor: pointer;
+}
+
+.reaction-badge {
+    position: absolute;
+    right: -10px;
+    bottom: -10px;
+    width: 26px;
+    height: 26px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    border: 1px solid rgba(216, 122, 122, 0.2);
+    background-color: #FFFFFF;
+    font-size: 0.85rem;
+    line-height: 1;
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.12);
+    animation: reactionPop 0.2s ease-out;
+}
+
+@keyframes reactionPop {
+    from {
+        transform: scale(0.6);
+        opacity: 0;
+    }
+    to {
+        transform: scale(1);
+        opacity: 1;
+    }
 }
 
 @keyframes slideIn {

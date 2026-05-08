@@ -181,8 +181,15 @@ function handleWebSocketMessage(event) {
             return;
         }
 
+        if (data.type === "like") {
+            updateReactionBadge(data.message_id, data.reactions || {});
+            return;
+        }
+
         const sender = data.sender || "unknown";
         const encryptedText = data.text || "";
+        const messageId = data.id;
+        const reactions = data.reactions || {};
 
         console.log("[DEBUG] WebSocket message received - sender:", sender, "encrypted length:", encryptedText.length);
 
@@ -190,7 +197,12 @@ function handleWebSocketMessage(event) {
 
         console.log("[DEBUG] Decrypted to:", decryptedText.substring(0, 50));
 
-        renderMessage(sender, decryptedText);
+        renderMessage({
+            id: messageId,
+            sender,
+            text: decryptedText,
+            reactions,
+        });
         scrollToBottom();
     } catch (error) {
         console.error("Error handling message:", error);
@@ -292,28 +304,181 @@ function formatMessage(text) {
         .replaceAll('"', '&quot;')
         .replaceAll("'", '&#039;');
 
-    // Convert URLs to clickable links (regex replacement for pattern matching)
+    // Convert URLs to clickable links using regex matches.
     const urlRegex = /(https?:\/\/[^\s<>"]+)/g;
-    escaped = escaped.replace(urlRegex, '<a href="$1" target="_blank" rel="noopener noreferrer">$1</a>');
+    let formatted = "";
+    let lastIndex = 0;
 
-    return escaped;
+    for (const match of escaped.matchAll(urlRegex)) {
+        const url = match[0];
+        const matchIndex = match.index ?? 0;
+        formatted += escaped.slice(lastIndex, matchIndex);
+        formatted += `<a href="${url}" target="_blank" rel="noopener noreferrer">${url}</a>`;
+        lastIndex = matchIndex + url.length;
+    }
+
+    formatted += escaped.slice(lastIndex);
+    return formatted;
+}
+
+/**
+ * Render or clear the reaction badge inside a message bubble.
+ *
+ * @param {HTMLElement} bubbleDiv The bubble element to update.
+ * @param {Record<string, string>} reactions The reactions map for the message.
+ * @returns {void}
+ */
+function syncReactionBadge(bubbleDiv, reactions) {
+    const existingBadge = bubbleDiv.querySelector(".reaction-badge");
+    const hasReactions = reactions && typeof reactions === "object" && Object.keys(reactions).length > 0;
+
+    if (!hasReactions) {
+        if (existingBadge) {
+            existingBadge.remove();
+        }
+        return;
+    }
+
+    if (existingBadge) {
+        existingBadge.textContent = "❤️";
+        return;
+    }
+
+    const badge = document.createElement("span");
+    badge.className = "reaction-badge";
+    badge.textContent = "❤️";
+    bubbleDiv.appendChild(badge);
+}
+
+/**
+ * Update a rendered message bubble's reaction badge in place.
+ *
+ * @param {number|string} messageId The message id from Supabase.
+ * @param {Record<string, string>} reactions The updated reactions map.
+ * @returns {void}
+ */
+function updateReactionBadge(messageId, reactions) {
+    if (messageId === undefined || messageId === null) {
+        return;
+    }
+
+    const bubbleDiv = document.querySelector(`[data-id="${messageId}"]`);
+    if (!bubbleDiv) {
+        return;
+    }
+
+    bubbleDiv.dataset.reactions = JSON.stringify(reactions || {});
+    syncReactionBadge(bubbleDiv, reactions || {});
+}
+
+/**
+ * Send a like reaction for a specific message id.
+ *
+ * @param {number|string} messageId The message id to react to.
+ * @returns {void}
+ */
+function sendLikeReaction(messageId) {
+    const numericMessageId = Number(messageId);
+    if (ws?.readyState !== WebSocket.OPEN || Number.isNaN(numericMessageId)) {
+        return;
+    }
+
+    ws.send(JSON.stringify({
+        type: "like",
+        message_id: numericMessageId,
+        sender: currentUser,
+    }));
+}
+
+/**
+ * Create mutable timing state for a message bubble reaction detector.
+ *
+ * @returns {{ lastClickTime: number, lastTouchEndTime: number }}
+ */
+function createDoubleTapState() {
+    return {
+        lastClickTime: 0,
+        lastTouchEndTime: 0,
+    };
+}
+
+/**
+ * Handle touch interaction for the custom double-tap detector.
+ *
+ * @param {TouchEvent} event The touch event.
+ * @param {{ lastClickTime: number, lastTouchEndTime: number }} state The timing state.
+ * @param {number|string} messageId The message id to like.
+ * @returns {void}
+ */
+function handleReactionTouchEnd(event, state, messageId) {
+    const now = Date.now();
+
+    if (now - state.lastTouchEndTime <= 300) {
+        event.preventDefault();
+        sendLikeReaction(messageId);
+    }
+
+    state.lastTouchEndTime = now;
+}
+
+/**
+ * Handle click interaction for the custom double-tap detector.
+ *
+ * @param {MouseEvent} event The click event.
+ * @param {{ lastClickTime: number, lastTouchEndTime: number }} state The timing state.
+ * @param {number|string} messageId The message id to like.
+ * @returns {void}
+ */
+function handleReactionClick(event, state, messageId) {
+    const now = Date.now();
+
+    if (now - state.lastTouchEndTime < 500) {
+        return;
+    }
+
+    if (now - state.lastClickTime <= 300) {
+        event.preventDefault();
+        sendLikeReaction(messageId);
+    }
+
+    state.lastClickTime = now;
+}
+
+/**
+ * Attach desktop and mobile double-tap listeners to a message bubble.
+ *
+ * @param {HTMLElement} bubbleDiv The bubble element to observe.
+ * @param {number|string} messageId The message id to like.
+ * @returns {void}
+ */
+function attachReactionListener(bubbleDiv, messageId) {
+    if (messageId === undefined || messageId === null) {
+        return;
+    }
+
+    const state = createDoubleTapState();
+    bubbleDiv.addEventListener("touchend", (event) => handleReactionTouchEnd(event, state, messageId), { passive: false });
+    bubbleDiv.addEventListener("click", (event) => handleReactionClick(event, state, messageId));
 }
 
 /**
  * Render a message bubble in the messages container.
  *
- * @param {string} sender The sender's identifier.
- * @param {string} text The decrypted message text.
+ * @param {object} msg The message payload.
  * @returns {void}
  */
-function renderMessage(sender, text) {
+function renderMessage(msg) {
     const container = document.getElementById("messagesContainer");
     if (!container) return;
 
+    const sender = (msg && msg.sender ? String(msg.sender) : "unknown").toLowerCase();
+    const messageId = msg ? msg.id : null;
+    const text = msg && typeof msg.text === "string" ? msg.text : "[Invalid message]";
+    const reactions = msg && msg.reactions && typeof msg.reactions === "object" ? msg.reactions : {};
     const isSent = sender === currentUser;
 
     // Validate and clean the text
-    const cleanText = text && typeof text === "string" ? text : "[Invalid message]";
+    const cleanText = text;
     console.log("[DEBUG] renderMessage called - sender:", sender, "text:", cleanText.substring(0, 50));
 
     const messageDiv = document.createElement("div");
@@ -321,7 +486,14 @@ function renderMessage(sender, text) {
 
     const bubbleDiv = document.createElement("div");
     bubbleDiv.className = "message-bubble";
+    if (messageId !== null && messageId !== undefined) {
+        bubbleDiv.dataset.id = String(messageId);
+        bubbleDiv.dataset.reactions = JSON.stringify(reactions);
+    }
     bubbleDiv.innerHTML = formatMessage(cleanText);
+
+    syncReactionBadge(bubbleDiv, reactions);
+    attachReactionListener(bubbleDiv, messageId);
 
     messageDiv.appendChild(bubbleDiv);
 
@@ -362,6 +534,7 @@ function sendMessage() {
 
     // Send via WebSocket
     const payload = JSON.stringify({
+        type: "message",
         sender: currentUser,
         text: encryptedText
     });
@@ -400,7 +573,12 @@ async function loadChatHistory() {
                 console.warn("[DEBUG] Decryption failed for message", index);
             }
 
-            renderMessage(sender, decryptedText);
+            renderMessage({
+                id: msg.id,
+                sender,
+                text: decryptedText,
+                reactions: msg.reactions || {},
+            });
         });
 
         // Scroll to bottom after rendering history
@@ -409,6 +587,89 @@ async function loadChatHistory() {
         console.error("Error loading chat history:", error);
     }
 }
+
+    /**
+     * Update the header with the current chat partner.
+     *
+     * @param {string} username The authenticated username.
+     * @returns {void}
+     */
+    function updatePartnerName(username) {
+        const partner = username.toLowerCase() === 'abdi' ? 'Alysha' : 'Abdi';
+        const partnerNameElement = document.getElementById('partner-name');
+        if (partnerNameElement) {
+            partnerNameElement.textContent = partner;
+        }
+    }
+
+    /**
+     * Wire the login controls.
+     *
+     * @returns {void}
+     */
+    function wireLoginControls() {
+        const unlockButton = document.getElementById('unlock-button');
+        if (unlockButton) {
+            unlockButton.addEventListener('click', handleUnlock);
+        }
+
+        const vaultKeyInput = document.getElementById('vault-key-input');
+        if (vaultKeyInput) {
+            vaultKeyInput.addEventListener('keypress', (e) => {
+                if (e.key === 'Enter') {
+                    handleUnlock(e);
+                }
+            });
+        }
+    }
+
+    /**
+     * Restore a saved chat session if one exists.
+     *
+     * @returns {boolean} True when chat was restored, otherwise false.
+     */
+    function restoreSavedSession() {
+        const savedKey = sessionStorage.getItem('vaultKey');
+        const savedUser = localStorage.getItem('username');
+
+        const loginContainer = document.getElementById('login-container');
+        const chatContainer = document.getElementById('chat-container');
+
+        if (savedKey && savedUser) {
+            SYMMETRIC_KEY = savedKey;
+            currentUser = savedUser.trim().toLowerCase();
+            updatePartnerName(currentUser);
+
+            if (loginContainer) loginContainer.style.display = 'none';
+            if (chatContainer) chatContainer.style.display = '';
+
+            setupUser();
+            loadChatHistory();
+            connect();
+            return true;
+        }
+
+        if (loginContainer) loginContainer.style.display = '';
+        if (chatContainer) chatContainer.style.display = 'none';
+        return false;
+    }
+
+    /**
+     * Wire the composer controls.
+     *
+     * @returns {void}
+     */
+    function wireComposerControls() {
+        const sendButton = document.getElementById('sendButton');
+        if (sendButton) {
+            sendButton.addEventListener('click', handleSendButtonClick);
+        }
+
+        const messageInput = document.getElementById('messageInput');
+        if (messageInput) {
+            messageInput.addEventListener('keypress', handleMessageInputKeyPress);
+        }
+    }
 
 // ============================================================================
 // Event Listeners & Initialization
@@ -420,61 +681,9 @@ async function loadChatHistory() {
  * @returns {void}
  */
 function initializeApp() {
-    // Wire login button
-    const unlockButton = document.getElementById('unlock-button');
-    if (unlockButton) {
-        unlockButton.addEventListener('click', handleUnlock);
-    }
-    const vaultKeyInput = document.getElementById('vault-key-input');
-    if (vaultKeyInput) {
-        vaultKeyInput.addEventListener('keypress', (e) => {
-            if (e.key === 'Enter') {
-                handleUnlock(e);
-            }
-        });
-    }
-
-    // Silent auth: check sessionStorage/localStorage for vault key and username
-    const savedKey = sessionStorage.getItem('vaultKey');
-    const savedUser = localStorage.getItem('username');
-
-    if (savedKey && savedUser) {
-        SYMMETRIC_KEY = savedKey;
-        currentUser = savedUser.trim().toLowerCase();
-
-        // Set partner name in header
-        const partner = currentUser.toLowerCase() === 'abdi' ? 'Alysha' : 'Abdi';
-        const partnerNameElement = document.getElementById('partner-name');
-        if (partnerNameElement) {
-            partnerNameElement.textContent = partner;
-        }
-
-        // show chat
-        const loginContainer = document.getElementById('login-container');
-        const chatContainer = document.getElementById('chat-container');
-        if (loginContainer) loginContainer.style.display = 'none';
-        if (chatContainer) chatContainer.style.display = '';
-
-        setupUser();
-        loadChatHistory();
-        connect();
-    } else {
-        // Show login screen
-        const loginContainer = document.getElementById('login-container');
-        const chatContainer = document.getElementById('chat-container');
-        if (loginContainer) loginContainer.style.display = '';
-        if (chatContainer) chatContainer.style.display = 'none';
-    }
-
-    const sendButton = document.getElementById("sendButton");
-    if (sendButton) {
-        sendButton.addEventListener("click", handleSendButtonClick);
-    }
-
-    const messageInput = document.getElementById("messageInput");
-    if (messageInput) {
-        messageInput.addEventListener("keypress", handleMessageInputKeyPress);
-    }
+    wireLoginControls();
+    restoreSavedSession();
+    wireComposerControls();
 }
 
 /**
