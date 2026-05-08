@@ -10,9 +10,6 @@
  * key provisioning mechanism for production deployments.
  */
 
-// Remote backend domain for Netlify frontend to connect to Render API
-const BACKEND_DOMAIN = "pinkvault.onrender.com";
-
 // ============================================================================
 // Configuration
 // ============================================================================
@@ -110,7 +107,9 @@ function decryptMessage(ciphertext) {
  * @returns {string} The absolute WebSocket endpoint URL.
  */
 function buildWebSocketUrl() {
-    return 'wss://' + BACKEND_DOMAIN + '/ws';
+    const protocol = globalThis.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const wsUrl = protocol + '//' + globalThis.location.host + '/ws';
+    return wsUrl;
 }
 
 // ============================================================================
@@ -134,7 +133,8 @@ function connect() {
         }
     }
 
-    const wsUrl = 'wss://' + BACKEND_DOMAIN + '/ws';
+    const protocol = globalThis.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const wsUrl = protocol + '//' + globalThis.location.host + '/ws';
 
     try {
         ws = new WebSocket(wsUrl);
@@ -361,7 +361,7 @@ function sendMessage() {
  */
 async function loadChatHistory() {
     try {
-        const response = await fetch('https://' + BACKEND_DOMAIN + '/history');
+        const response = await fetch('/history');
         if (!response.ok) {
             console.error("Failed to fetch chat history");
             return;

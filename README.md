@@ -4,9 +4,9 @@ A real-time encrypted chat application.
 
 ## Architecture
 
-* **Backend**: FastAPI on Render. Handles HTTP endpoints and WebSocket server.
+* **Backend & Frontend Host**: FastAPI on Render. Handles HTTP endpoints, WebSocket server, and serves the static frontend.
 * **Database**: Supabase PostgreSQL. Stores encrypted messages.
-* **Frontend**: Vanilla JavaScript SPA on Netlify. No build tools.
+* **Frontend**: Vanilla JavaScript SPA. No build tools.
 * **Security**: Client-side AES encryption via CryptoJS.
 
 ## Security
@@ -24,68 +24,50 @@ cd PinkVault
 
 ```
 
-
 2. **Setup virtual environment**:
+
 ```bash
 python -m venv venv
 source venv/bin/activate  # Windows: venv\Scripts\activate
 
 ```
 
-
 3. **Install dependencies**:
+
 ```bash
 pip install -r requirements.txt
 
 ```
 
-
 4. **Configure environment variables**:
 Create `.env` in the root:
+
 ```env
-SUPABASE_URL=https://your-project-id.supabase.co
+SUPABASE_URL=[https://your-project-id.supabase.co](https://your-project-id.supabase.co)
 SUPABASE_KEY=your-anon-key-here
 ALLOWED_USERS=abdi,alysha
 
 ```
 
+5. **Run application**:
 
-5. **Run backend**:
 ```bash
 uvicorn main:app --reload
 
 ```
 
-
 6. **Access UI**:
 Open `http://localhost:8000/`.
 
-## Deployment Strategy
+## Deployment Strategy (Render)
 
-### Backend (Render)
-
-1. Push to GitHub.
-2. Create Render Web Service. Connect repository.
-3. **Start Command**: `uvicorn main:app --host 0.0.0.0 --port $PORT`
-4. Add `SUPABASE_URL`, `SUPABASE_KEY`, and `ALLOWED_USERS` to Render environment variables.
-5. Deploy. Note the Render URL (`https://pinkvault-api.onrender.com`).
-
-### Frontend (Netlify)
-
-1. Deploy `static/` folder to Netlify.
-2. Update `static/app.js` to point to the Render backend for both HTTP and WS connections.
-3. Update `main.py` CORS settings to lock down the origin to your Netlify URL:
-```python
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["https://pinkvault-app.netlify.app"],
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
-```
-
-
+1. Push code to GitHub.
+2. Create a Render Web Service and connect the repository.
+3. **Build Command**: `pip install -r requirements.txt`
+4. **Start Command**: `uvicorn main:app --host 0.0.0.0 --port $PORT`
+5. Add `SUPABASE_URL`, `SUPABASE_KEY`, and `ALLOWED_USERS` to Render environment variables.
+6. Deploy.
+7. **Keep-Alive**: Configure a free cron job (e.g., cron-job.org) to ping `https://<your-render-url>/health` every 14 minutes to prevent the free instance from sleeping.
 
 ## API Endpoints
 
@@ -122,4 +104,5 @@ This project is open-source and available for educational and commercial use und
 
 ---
 
-**Made with ❤️ by [Abdul Hayy Khan](https://www.linkedin.com/in/abdulhayykhan/)**
+**Made with ❤️ by [Abdul Hayy Khan**](https://www.linkedin.com/in/abdulhayykhan/)
+
