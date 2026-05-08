@@ -188,27 +188,18 @@ function handleWebSocketMessage(event) {
         }
 
         if (data.type === "like") {
-            const bubble = document.querySelector(`.message-bubble[data-id="${data.message_id}"]`);
-            if (!bubble) {
-                console.error('Bubble not found for ID:', data.message_id);
-                return;
-            }
+            const bubble = document.querySelector(`[data-id="${data.message_id}"]`);
+            if (bubble) {
+                // Remove existing badge
+                const oldBadge = bubble.querySelector('.reaction-badge');
+                if (oldBadge) oldBadge.remove();
 
-            const emojis = Object.values(data.reactions || {}).join('');
-            let badge = bubble.querySelector('.reaction-badge');
-
-            if (!emojis) {
-                if (badge) {
-                    badge.remove();
+                // Add new badge if reactions exist
+                const emojis = Object.values(data.reactions).join('');
+                if (emojis) {
+                    const badgeHtml = `<div class="reaction-badge">${emojis}</div>`;
+                    bubble.insertAdjacentHTML('beforeend', badgeHtml);
                 }
-                return;
-            }
-
-            if (!badge) {
-                // Create badge using insertAdjacentHTML to ensure it's inside the bubble
-                bubble.insertAdjacentHTML('beforeend', `<div class="reaction-badge">${emojis}</div>`);
-            } else {
-                badge.textContent = emojis;
             }
             return;
         }
