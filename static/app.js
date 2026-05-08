@@ -496,105 +496,88 @@ function getMessageBubbleFromTarget(target) {
  * @returns {void}
  */
 function bindReactionPickerInteractions() {
-    const chatContainer = document.getElementById("chat-container");
-    const picker = document.getElementById("emoji-picker");
-    if (!chatContainer || !picker) {
-        return;
-    }
+    // Unified event delegation using pointer events on the chat container.
+    const chatContainer = document.getElementById('chat-container');
+    const picker = document.getElementById('emoji-picker');
+    if (!chatContainer || !picker) return;
 
-    chatContainer.addEventListener("contextmenu", (event) => {
-        const bubbleDiv = getMessageBubbleFromTarget(event.target);
-        const messageId = bubbleDiv?.dataset?.id;
-        if (!messageId) {
-            return;
-        }
+    let lastTapTime = 0;
+    let pressTimer = null;
+    // activeMessageId is a module-level variable used elsewhere; do not redeclare it here.
 
-        event.preventDefault();
-        hideEmojiPicker();
-        showEmojiPicker(event.clientX, event.clientY, messageId);
-    });
+    // Handle Double-Tap and Long-Press globally
+    chatContainer.addEventListener('pointerdown', (e) => {
+        const bubble = e.target.closest('.message-bubble');
+        if (!bubble) return;
 
-    chatContainer.addEventListener("touchstart", (event) => {
-        const bubbleDiv = getMessageBubbleFromTarget(event.target);
-        const touch = event.touches[0];
-        const messageId = bubbleDiv?.dataset?.id;
-
-        if (!messageId || !touch) {
-            return;
-        }
-
-        clearTimeout(touchPressTimerId);
-        touchPressTimerId = globalThis.setTimeout(() => {
-            hideEmojiPicker();
-            showEmojiPicker(touch.clientX, touch.clientY, messageId);
-            try { if (navigator.vibrate) navigator.vibrate(50); } catch(e) {}
-        }, 500);
-    }, { passive: true });
-
-    chatContainer.addEventListener("touchend", () => {
-        clearTimeout(touchPressTimerId);
-    });
-
-    chatContainer.addEventListener("touchmove", () => {
-        clearTimeout(touchPressTimerId);
-    });
-
-    chatContainer.addEventListener("touchcancel", () => {
-        clearTimeout(touchPressTimerId);
-    });
-
-    // Pointer-based double-tap detector (works for mouse and touch via pointer events).
-    // If the same message bubble is tapped twice within 300ms, send a heart like
-    // and prevent the long-press emoji picker from appearing.
-    chatContainer.addEventListener('pointerup', (event) => {
-        const bubbleDiv = getMessageBubbleFromTarget(event.target);
-        const messageId = bubbleDiv?.dataset?.id;
+        const messageId = bubble.getAttribute('data-id');
         if (!messageId) return;
 
-        const now = Date.now();
-        if (lastTapMessageId === messageId && (now - lastTapTimestamp) <= 300) {
-            // Double-tap detected
-            clearTimeout(touchPressTimerId);
-            hideEmojiPicker();
-            try {
-                sendReaction(messageId, '❤️');
-            } catch (e) {
-                console.error('Failed to send double-tap reaction', e);
-            }
-            // Reset last tap tracking to avoid triple-tap triggering
-            lastTapTimestamp = 0;
-            lastTapMessageId = null;
-            event.preventDefault();
-            return;
+        const currentTime = new Date().getTime();
+        const tapLength = currentTime - lastTapTime;
+
+        // Double Tap (Under 300ms)
+        if (tapLength < 300 && tapLength > 0) {
+            clearTimeout(pressTimer);
+            e.preventDefault();
+            console.log("[EVENT] Double tap detected on ID:", messageId);
+
+            const payload = { type: 'like', message_id: Number(messageId), sender: currentUser, emoji: '❤️' };
+            console.log('[WS SEND]', payload);
+            if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(payload));
+        } else {
+            // Long Press (Hold for 500ms)
+            pressTimer = setTimeout(() => {
+                console.log('[EVENT] Long press detected on ID:', messageId);
+                activeMessageId = messageId;
+                try { if (navigator.vibrate) navigator.vibrate(50); } catch(err){}
+
+                picker.style.left = e.pageX + 'px';
+                picker.style.top = (e.pageY - 50) + 'px';
+                picker.classList.add('visible');
+            }, 500);
         }
-
-        // Record this tap for potential double-tap
-        lastTapTimestamp = now;
-        lastTapMessageId = messageId;
-    }, { passive: false });
-
-    picker.addEventListener("click", (event) => {
-        const target = event.target;
-        if (!(target instanceof HTMLElement) || target.tagName !== "SPAN") {
-            return;
-        }
-
-        if (activeMessageId === null) {
-            return;
-        }
-
-        const selectedEmoji = target.textContent || "❤️";
-        sendReaction(activeMessageId, selectedEmoji);
-        hideEmojiPicker();
+        lastTapTime = currentTime;
     });
 
-    document.addEventListener("click", (event) => {
-        const target = event.target;
-        if (target instanceof HTMLElement && target.closest("#emoji-picker")) {
-            return;
-        }
+    // Cancel long-press if user moves or lifts finger early
+    chatContainer.addEventListener('pointerup', () => clearTimeout(pressTimer));
+    chatContainer.addEventListener('pointercancel', () => clearTimeout(pressTimer));
+    chatContainer.addEventListener('pointermove', () => clearTimeout(pressTimer));
 
-        hideEmojiPicker();
+    // Handle Desktop Right-Click
+    chatContainer.addEventListener('contextmenu', (e) => {
+        const bubble = e.target.closest('.message-bubble');
+        if (!bubble) return;
+
+        e.preventDefault();
+        const messageId = bubble.getAttribute('data-id');
+        console.log('[EVENT] Right-click detected on ID:', messageId);
+        activeMessageId = messageId;
+
+        picker.style.left = e.pageX + 'px';
+        picker.style.top = (e.pageY - 50) + 'px';
+        picker.classList.add('visible');
+    });
+
+    // Emoji Picker Click Logic
+    picker.addEventListener('click', (e) => {
+        if (e.target.tagName.toLowerCase() === 'span') {
+            const emoji = e.target.textContent;
+            if (activeMessageId) {
+                const payload = { type: 'like', message_id: Number(activeMessageId), sender: currentUser, emoji: emoji };
+                console.log('[WS SEND]', payload);
+                if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(payload));
+                picker.classList.remove('visible');
+            }
+        }
+    });
+
+    // Hide picker when clicking elsewhere
+    document.addEventListener('pointerdown', (e) => {
+        if (!e.target.closest('#emoji-picker') && !e.target.closest('.message-bubble')) {
+            picker.classList.remove('visible');
+        }
     });
 }
 
