@@ -424,12 +424,14 @@ function sendReaction(messageId, emoji) {
         return;
     }
 
-    ws.send(JSON.stringify({
+    const likePayload = {
         type: "like",
         message_id: numericMessageId,
         sender: currentUser,
         emoji: emoji || "❤️",
-    }));
+    };
+    console.log("[WS SEND]", likePayload);
+    ws.send(JSON.stringify(likePayload));
 }
 
 /**
@@ -603,7 +605,7 @@ function bindReactionPickerInteractions() {
  * @returns {void}
  */
 function renderMessage(msg) {
-    console.log("[RENDER MSG]", msg);
+    console.log("[DOM] Bubble created with ID:", msg?.id);
     const container = document.getElementById("messagesContainer");
     if (!container) return;
 

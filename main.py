@@ -216,27 +216,32 @@ async def handle_chat_payload(message_payload: dict[str, Any], authenticated_use
     payload_type = str(message_payload.get("type", "message")).strip().lower()
 
     if payload_type == "like":
-        message_id_raw = message_payload.get("message_id")
-        sender = str(message_payload.get("sender", authenticated_user)).strip().lower()
-        if sender != authenticated_user:
-            sender = authenticated_user
-
         try:
-            message_id = int(message_id_raw)
-        except (TypeError, ValueError):
-            return
+            message_id_raw = message_payload.get("message_id")
+            sender = str(message_payload.get("sender", authenticated_user)).strip().lower()
+            if sender != authenticated_user:
+                sender = authenticated_user
 
-        emoji = str(message_payload.get("emoji", "❤️"))
-        updated_message = await toggle_message_reaction(message_id, sender, emoji)
-        if not updated_message:
-            return
+            try:
+                message_id = int(message_id_raw)
+            except (TypeError, ValueError):
+                return
 
-        await manager.broadcast(json.dumps({
-            "type": "like",
-            "message_id": updated_message.get("id", message_id),
-            "reactions": updated_message.get("reactions", {}),
-        }))
-        return
+            emoji = str(message_payload.get("emoji", "❤️"))
+            print(f"[BACKEND] Processing like for message_id: {message_id}, emoji: {emoji}", flush=True)
+            updated_message = await toggle_message_reaction(message_id, sender, emoji)
+            if not updated_message:
+                return
+
+            print(f"[BACKEND] Supabase updated successfully.", flush=True)
+            await manager.broadcast(json.dumps({
+                "type": "like",
+                "message_id": updated_message.get("id", message_id),
+                "reactions": updated_message.get("reactions", {}),
+            }))
+            return
+        except Exception as e:
+            print(f"[BACKEND ERROR] {e}", flush=True)
 
     sender = str(message_payload.get("sender", authenticated_user)).strip().lower()
     encrypted_text = str(message_payload.get("text", ""))
@@ -349,6 +354,7 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
 
             try:
                 message_payload = json.loads(data)
+                print(f"[BACKEND RECV] {message_payload}", flush=True)
             except json.JSONDecodeError:
                 continue
 
