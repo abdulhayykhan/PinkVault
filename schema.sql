@@ -13,3 +13,8 @@ CREATE INDEX IF NOT EXISTS idx_messages_timestamp ON messages(timestamp DESC);
 
 -- 3. Add a reactions column to store message reactions
 ALTER TABLE messages ADD COLUMN reactions JSONB DEFAULT '{}'::jsonb;
+
+-- 4. RLS Policy: Allow the FastAPI backend to upload encrypted voice notes to the 'vault_media' storage bucket.
+CREATE POLICY "Allow public uploads"
+ON storage.objects FOR INSERT
+WITH CHECK ( bucket_id = 'vault_media' );

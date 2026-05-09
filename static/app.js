@@ -33,6 +33,7 @@ let audioChunks = [];
 // Track last tap for double-tap (300ms) detection
 let lastTapTimestamp = 0;
 let lastTapMessageId = null;
+let pingIntervalId = null;
 
 // ============================================================================
 // Encryption Functions
@@ -167,6 +168,13 @@ function handleWebSocketOpen() {
         ws.send(handshakeName);
         hasHandshaked = true;
         console.log("Handshake sent for:", handshakeName);
+        // Start application-level heartbeat to keep Render's load balancer happy
+        if (pingIntervalId) clearInterval(pingIntervalId);
+        pingIntervalId = setInterval(() => {
+            if (ws && ws.readyState === WebSocket.OPEN && hasHandshaked) {
+                ws.send(JSON.stringify({ type: "ping" }));
+            }
+        }, 30000); // 30 seconds
     }
 }
 
@@ -289,6 +297,10 @@ function handleWebSocketError(error) {
     isConnected = false;
     hasHandshaked = false;
     updateConnectionStatus(false);
+    if (pingIntervalId) {
+        clearInterval(pingIntervalId);
+        pingIntervalId = null;
+    }
 }
 
 /**
@@ -302,6 +314,11 @@ function handleWebSocketClose(event) {
     isConnected = false;
     hasHandshaked = false;
     updateConnectionStatus(false);
+
+    if (pingIntervalId) {
+        clearInterval(pingIntervalId);
+        pingIntervalId = null;
+    }
 
     if (event.code === 4403) {
         localStorage.removeItem("username");

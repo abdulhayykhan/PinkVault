@@ -221,6 +221,10 @@ async def handle_chat_payload(message_payload: dict[str, Any], authenticated_use
     """Process a WebSocket payload for a message or reaction."""
     payload_type = str(message_payload.get("type", "message")).strip().lower()
 
+    # Ignore application-level heartbeat pings sent by clients
+    if payload_type == "ping":
+        return
+
     if payload_type == "typing":
         await manager.broadcast(json.dumps({
             "type": "typing",
