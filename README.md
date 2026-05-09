@@ -45,7 +45,7 @@ Create `.env` in the root:
 ```env
 SUPABASE_URL=[https://your-project-id.supabase.co](https://your-project-id.supabase.co)
 SUPABASE_KEY=your-anon-key-here
-ALLOWED_USERS=abdi,alysha
+ALLOWED_USERS=user1,user2
 
 ```
 
@@ -104,5 +104,5 @@ This project is open-source and available for educational and commercial use und
 
 ---
 
-**Made with ❤️ by [Abdul Hayy Khan**](https://www.linkedin.com/in/abdulhayykhan/)
+**Made with ❤️ by [Abdul Hayy Khan]**(https://www.linkedin.com/in/abdulhayykhan/)
 

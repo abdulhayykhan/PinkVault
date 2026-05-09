@@ -155,21 +155,19 @@ html, body {
 }
 
 #emoji-picker {
-    position: fixed;
-    background: white;
-    border-radius: 30px;
-    box-shadow: 0 4px 15px rgba(0,0,0,0.15);
-    padding: 8px 12px;
-    display: none;
-    gap: 12px;
-    z-index: 9999 !important;
-    transition: all 0.15s ease;
+    position: fixed !important;
+    display: none; /* Hidden by default */
+    background: white !important;
+    border: 1px solid #ffb6c1 !important;
+    border-radius: 30px !important;
+    padding: 10px 15px !important;
+    gap: 15px !important;
+    z-index: 10000 !important;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.2) !important;
+    pointer-events: auto !important;
 }
-
-.visible {
+#emoji-picker.show {
     display: flex !important;
-    opacity: 1;
-    pointer-events: auto;
 }
 
 #emoji-picker span {
@@ -185,9 +183,6 @@ html, body {
     transform: scale(1.2);
 }
 
-.hidden {
-    display: none !important;
-}
 
 @keyframes reactionPop {
     from {

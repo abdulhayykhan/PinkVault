@@ -444,8 +444,7 @@ function hideEmojiPicker() {
         return;
     }
 
-    picker.classList.remove("visible");
-    picker.classList.add("hidden");
+    picker.classList.remove("show");
     activeMessageId = null;
 }
 
@@ -470,8 +469,7 @@ function showEmojiPicker(x, y, messageId) {
 
     picker.style.left = `${left}px`;
     picker.style.top = `${top}px`;
-    picker.classList.remove("hidden");
-    picker.classList.add("visible");
+    picker.classList.add("show");
     activeMessageId = messageId;
 }
 
@@ -535,7 +533,7 @@ function bindReactionPickerInteractions() {
                 picker.style.position = 'fixed';
                 picker.style.left = `${e.clientX}px`;
                 picker.style.top = `${e.clientY - 60}px`;
-                picker.classList.add('visible');
+                picker.classList.add('show');
             }, 500);
         }
         lastTapTime = currentTime;
@@ -559,7 +557,7 @@ function bindReactionPickerInteractions() {
         picker.style.position = 'fixed';
         picker.style.left = `${e.clientX}px`;
         picker.style.top = `${e.clientY - 60}px`;
-        picker.classList.add('visible');
+        picker.classList.add('show');
     });
 
     // Emoji Picker Click Logic
@@ -573,7 +571,7 @@ function bindReactionPickerInteractions() {
                 const payload = { type: 'like', message_id: finalId, sender: currentUser, emoji: emoji };
                 console.log('[WS SEND]', payload);
                 if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(payload));
-                picker.classList.remove('visible');
+                picker.classList.remove('show');
             }
         }
     });
@@ -581,7 +579,7 @@ function bindReactionPickerInteractions() {
     // Hide picker when clicking elsewhere
     document.addEventListener('pointerdown', (e) => {
         if (!e.target.closest('#emoji-picker') && !e.target.closest('.message-bubble')) {
-            picker.classList.remove('visible');
+            picker.classList.remove('show');
         }
     });
 }
