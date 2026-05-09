@@ -23,6 +23,7 @@ let ws = null;
 let reconnectAttempt = 0;
 let maxReconnectDelay = 30000; // 30 seconds
 let isConnected = false;
+let hasHandshaked = false;
 let reconnectTimerId = null;
 let activeMessageId = null;
 let touchPressTimerId = null;
@@ -137,6 +138,7 @@ function connect() {
     try {
         ws = new WebSocket(wsUrl);
 
+        ws.onopen = handleWebSocketOpen;
         ws.onmessage = handleWebSocketMessage;
         ws.onerror = handleWebSocketError;
         ws.onclose = handleWebSocketClose;
@@ -158,7 +160,10 @@ function handleWebSocketOpen() {
     updateConnectionStatus(true);
 
     if (ws !== null && ws.readyState === WebSocket.OPEN) {
-        ws.send(currentUser);
+        const handshakeName = String(currentUser).trim().toLowerCase();
+        ws.send(handshakeName);
+        hasHandshaked = true;
+        console.log("Handshake sent for:", handshakeName);
     }
 }
 
@@ -232,6 +237,7 @@ function handleWebSocketMessage(event) {
 function handleWebSocketError(error) {
     console.error("WebSocket error:", error);
     isConnected = false;
+    hasHandshaked = false;
     updateConnectionStatus(false);
 }
 
@@ -244,6 +250,7 @@ function handleWebSocketError(error) {
 function handleWebSocketClose(event) {
     console.log("WebSocket disconnected");
     isConnected = false;
+    hasHandshaked = false;
     updateConnectionStatus(false);
 
     if (event.code === 4403) {
@@ -406,7 +413,7 @@ function sendLikeReaction(messageId) {
  */
 function sendReaction(messageId, emoji) {
     const finalId = messageId;
-    if (ws?.readyState !== WebSocket.OPEN || finalId === undefined || finalId === null || String(finalId).length === 0) {
+    if (!hasHandshaked || ws?.readyState !== WebSocket.OPEN || finalId === undefined || finalId === null || String(finalId).length === 0) {
         return;
     }
 
@@ -636,7 +643,7 @@ function sendMessage() {
     }
 
     const messageText = input.value.trim();
-    if (messageText.length === 0 || ws === null || ws.readyState !== WebSocket.OPEN) {
+    if (!hasHandshaked || messageText.length === 0 || ws === null || ws.readyState !== WebSocket.OPEN) {
         return;
     }
 
