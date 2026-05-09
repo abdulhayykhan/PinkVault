@@ -3,3 +3,4 @@ uvicorn
 websockets
 python-dotenv
 supabase
+python-multipart
