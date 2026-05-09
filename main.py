@@ -15,10 +15,11 @@ Components:
 import asyncio
 import json
 import os
+import uuid
 from contextlib import suppress
-from typing import Any
+from typing import Annotated, Any
 
-from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, File, HTTPException, UploadFile, WebSocket, WebSocketDisconnect
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from db import get_supabase_client
@@ -269,6 +270,24 @@ async def handle_chat_payload(message_payload: dict[str, Any], authenticated_use
         "text": encrypted_text,
         "reactions": saved_message.get("reactions", {}),
     }))
+
+
+@app.post("/upload_media")
+async def upload_media(file: Annotated[UploadFile, File(...)]) -> dict[str, str]:
+    """Upload encrypted media blob to Supabase Storage and return a public URL."""
+    file_bytes = await file.read()
+    file_name = f"{uuid.uuid4()}.enc"
+
+    await asyncio.to_thread(
+        lambda: supabase_client.storage.from_("vault_media").upload(
+            path=file_name,
+            file=file_bytes,
+            file_options={"content-type": "text/plain"},
+        )
+    )
+
+    public_url = supabase_client.storage.from_("vault_media").get_public_url(file_name)
+    return {"url": public_url}
 
 
 @app.get("/health")

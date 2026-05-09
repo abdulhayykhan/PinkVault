@@ -28,6 +28,8 @@ let reconnectTimerId = null;
 let activeMessageId = null;
 let touchPressTimerId = null;
 let typingDebounceTimerId = null;
+let mediaRecorder = null;
+let audioChunks = [];
 // Track last tap for double-tap (300ms) detection
 let lastTapTimestamp = 0;
 let lastTapMessageId = null;
@@ -647,7 +649,21 @@ function renderMessage(msg) {
     // Ensure data-id is set immediately (use raw msg.id)
     bubbleDiv.setAttribute('data-id', msg.id);
     bubbleDiv.setAttribute('data-reactions', JSON.stringify(msg.reactions || {}));
-    bubbleDiv.innerHTML = formatMessage(cleanText);
+    if (cleanText.startsWith('[VOICE]:')) {
+        const url = cleanText.substring(8);
+        bubbleDiv.innerHTML = '<span style="font-size: 0.85rem;">🎤 <em>Decrypting audio...</em></span>';
+
+        fetch(url)
+            .then(r => r.text())
+            .then(encryptedData => {
+                const decryptedDataUrl = decryptMessage(encryptedData);
+                if (decryptedDataUrl.includes("Decryption Error")) throw new Error("audio decryption failed");
+                bubbleDiv.innerHTML = `<audio controls src="${decryptedDataUrl}" style="max-width: 220px; height: 35px; outline: none;"></audio>`;
+            })
+            .catch(() => bubbleDiv.innerHTML = '⚠️ Audio load failed');
+    } else {
+        bubbleDiv.innerHTML = formatMessage(cleanText);
+    }
 
     // Apply badge immediately if reactions exist
     if (reactions && typeof reactions === 'object' && Object.keys(reactions).length > 0) {
@@ -869,6 +885,73 @@ function wireReactionControls() {
     bindReactionPickerInteractions();
 }
 
+function setupVoiceRecording() {
+    const micBtn = document.getElementById('micButton');
+    if (!micBtn) return;
+
+    micBtn.addEventListener('pointerdown', async (e) => {
+        e.preventDefault();
+        try {
+            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            mediaRecorder = new MediaRecorder(stream);
+            audioChunks = [];
+
+            mediaRecorder.ondataavailable = event => audioChunks.push(event.data);
+            mediaRecorder.onstop = processAndSendAudio;
+
+            mediaRecorder.start();
+            micBtn.style.backgroundColor = '#d32f2f';
+        } catch (err) {
+            console.error("Mic access denied", err);
+        }
+    });
+
+    micBtn.addEventListener('pointerup', stopRecording);
+    micBtn.addEventListener('pointercancel', stopRecording);
+    micBtn.addEventListener('pointerleave', stopRecording);
+
+    function stopRecording(e) {
+        e.preventDefault();
+        const recorder = mediaRecorder;
+        if (recorder?.state === 'recording') {
+            recorder.stop();
+            recorder.stream.getTracks().forEach(track => track.stop());
+        }
+        micBtn.style.backgroundColor = 'var(--text-secondary)';
+    }
+}
+
+function processAndSendAudio() {
+    const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
+    const reader = new FileReader();
+    reader.readAsDataURL(audioBlob);
+    reader.onloadend = async () => {
+        const base64Audio = reader.result;
+        const encryptedAudio = encryptMessage(base64Audio);
+
+        const formData = new FormData();
+        formData.append('file', new Blob([encryptedAudio], { type: 'text/plain' }), 'voice.enc');
+
+        try {
+            const res = await fetch('/upload_media', { method: 'POST', body: formData });
+            const data = await res.json();
+
+            if (!hasHandshaked || ws?.readyState !== WebSocket.OPEN) {
+                return;
+            }
+
+            const payload = JSON.stringify({
+                type: "message",
+                sender: currentUser,
+                text: encryptMessage(`[VOICE]:${data.url}`)
+            });
+            ws.send(payload);
+        } catch (err) {
+            console.error("Audio upload failed", err);
+        }
+    };
+}
+
 // ============================================================================
 // Event Listeners & Initialization
 // ============================================================================
@@ -883,6 +966,7 @@ function initializeApp() {
     restoreSavedSession();
     wireComposerControls();
     wireReactionControls();
+    setupVoiceRecording();
 }
 
 /**
