@@ -341,6 +341,8 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
 
     try:
         authenticated_user = (await websocket.receive_text()).strip().lower()
+        print(f"Connection attempt from: {authenticated_user}", flush=True)
+        print(f"ALLOWED_USERS: {ALLOWED_USERS}", flush=True)
         if authenticated_user not in ALLOWED_USERS:
             await websocket.close(code=4403, reason="username not allowed")
             return
