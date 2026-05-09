@@ -779,6 +779,9 @@ function wireComposerControls() {
     const messageInput = document.getElementById('messageInput');
     if (messageInput) {
         messageInput.addEventListener('keypress', handleMessageInputKeyPress);
+        messageInput.addEventListener('focus', () => {
+            setTimeout(scrollToBottom, 300);
+        });
     }
 }
 
