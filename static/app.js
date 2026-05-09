@@ -882,7 +882,6 @@ function registerServiceWorker() {
                 console.error("Service Worker registration failed:", error);
             });
     }
-}
 
 document.addEventListener("DOMContentLoaded", () => {
     initializeApp();
