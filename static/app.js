@@ -885,40 +885,81 @@ function wireReactionControls() {
     bindReactionPickerInteractions();
 }
 
+let isRecording = false;
+let isStartingMic = false;
+
 function setupVoiceRecording() {
     const micBtn = document.getElementById('micButton');
+    const messageInput = document.getElementById('messageInput');
     if (!micBtn) return;
 
-    micBtn.addEventListener('pointerdown', async (e) => {
+    let recordStartTime = 0;
+
+    const startRecording = async (e) => {
         e.preventDefault();
+        if (isRecording || isStartingMic) return;
+        isStartingMic = true;
+
         try {
             const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
             mediaRecorder = new MediaRecorder(stream);
             audioChunks = [];
-
-            mediaRecorder.ondataavailable = event => audioChunks.push(event.data);
-            mediaRecorder.onstop = processAndSendAudio;
-
+            
+            mediaRecorder.ondataavailable = event => {
+                if (event.data.size > 0) audioChunks.push(event.data);
+            };
+            
+            mediaRecorder.onstop = () => {
+                const duration = Date.now() - recordStartTime;
+                if (duration > 500 && audioChunks.length > 0) {
+                    processAndSendAudio();
+                }
+            };
+            
             mediaRecorder.start();
-            micBtn.style.backgroundColor = '#d32f2f';
+            isRecording = true;
+            recordStartTime = Date.now();
+
+            // UI: Lock input and show recording state
+            micBtn.classList.add('recording-active');
+            messageInput.value = '';
+            messageInput.placeholder = "🎙️ Recording... Release to send";
+            messageInput.disabled = true;
+
         } catch (err) {
             console.error("Mic access denied", err);
+        } finally {
+            isStartingMic = false;
         }
-    });
+    };
 
-    micBtn.addEventListener('pointerup', stopRecording);
-    micBtn.addEventListener('pointercancel', stopRecording);
-    micBtn.addEventListener('pointerleave', stopRecording);
-
-    function stopRecording(e) {
+    const stopRecording = (e) => {
         e.preventDefault();
-        const recorder = mediaRecorder;
-        if (recorder?.state === 'recording') {
-            recorder.stop();
-            recorder.stream.getTracks().forEach(track => track.stop());
+        if (!isRecording) return;
+
+        if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+            mediaRecorder.stop();
+            mediaRecorder.stream.getTracks().forEach(track => track.stop());
         }
-        micBtn.style.backgroundColor = 'var(--text-secondary)';
-    }
+
+        isRecording = false;
+
+        // UI: Revert to normal
+        micBtn.classList.remove('recording-active');
+        messageInput.placeholder = "Type a message...";
+        messageInput.disabled = false;
+        messageInput.focus();
+    };
+
+    // Mobile touch events
+    micBtn.addEventListener('touchstart', startRecording, { passive: false });
+    micBtn.addEventListener('touchend', stopRecording, { passive: false });
+    micBtn.addEventListener('touchcancel', stopRecording, { passive: false });
+
+    // Desktop mouse events
+    micBtn.addEventListener('mousedown', startRecording);
+    micBtn.addEventListener('mouseup', stopRecording);
+    micBtn.addEventListener('mouseleave', stopRecording);
 }
 
 function processAndSendAudio() {
