@@ -27,6 +27,7 @@ let hasHandshaked = false;
 let reconnectTimerId = null;
 let activeMessageId = null;
 let touchPressTimerId = null;
+let typingDebounceTimerId = null;
 // Track last tap for double-tap (300ms) detection
 let lastTapTimestamp = 0;
 let lastTapMessageId = null;
@@ -183,6 +184,48 @@ function handleWebSocketMessage(event) {
             return;
         }
 
+        if (data.type === "presence") {
+            const statusEl = document.getElementById("connectionStatus");
+            const onlineUsers = Array.isArray(data.users) ? data.users.map((user) => String(user).toLowerCase()) : [];
+            const partnerName = currentUser === "abdi" ? "alysha" : "abdi";
+            const isPartnerOnline = onlineUsers.includes(partnerName);
+
+            if (!statusEl) {
+                return;
+            }
+
+            statusEl.textContent = isPartnerOnline ? "Online" : "Offline";
+            statusEl.classList.toggle("online", isPartnerOnline);
+            return;
+        }
+
+        if (data.type === "typing") {
+            const sender = String(data.sender || "").toLowerCase();
+            if (!sender || sender === currentUser) {
+                return;
+            }
+
+            if (data.is_typing) {
+                const container = document.getElementById("messagesContainer");
+                if (!container || document.getElementById("typing-indicator")) {
+                    return;
+                }
+
+                container.insertAdjacentHTML(
+                    "beforeend",
+                    '<div id="typing-indicator" class="message received"><div class="message-bubble typing-bubble">...</div></div>'
+                );
+                scrollToBottom();
+                return;
+            }
+
+            const existingIndicator = document.getElementById("typing-indicator");
+            if (existingIndicator) {
+                existingIndicator.remove();
+            }
+            return;
+        }
+
         if (data.type === "like") {
             // Force string conversion to match DOM attribute exactly
             const targetId = String(data.message_id).trim();
@@ -211,6 +254,11 @@ function handleWebSocketMessage(event) {
         const encryptedText = data.text || "";
         const messageId = data.id;
         const reactions = data.reactions || {};
+
+        const typingIndicator = document.getElementById("typing-indicator");
+        if (typingIndicator) {
+            typingIndicator.remove();
+        }
 
 
         const decryptedText = decryptMessage(encryptedText);
@@ -779,6 +827,33 @@ function wireComposerControls() {
     const messageInput = document.getElementById('messageInput');
     if (messageInput) {
         messageInput.addEventListener('keypress', handleMessageInputKeyPress);
+        messageInput.addEventListener('input', () => {
+            if (!hasHandshaked || ws?.readyState !== WebSocket.OPEN) {
+                return;
+            }
+
+            ws.send(JSON.stringify({
+                type: 'typing',
+                sender: currentUser,
+                is_typing: true,
+            }));
+
+            if (typingDebounceTimerId !== null) {
+                clearTimeout(typingDebounceTimerId);
+            }
+
+            typingDebounceTimerId = setTimeout(() => {
+                if (!hasHandshaked || ws?.readyState !== WebSocket.OPEN) {
+                    return;
+                }
+
+                ws.send(JSON.stringify({
+                    type: 'typing',
+                    sender: currentUser,
+                    is_typing: false,
+                }));
+            }, 1500);
+        });
         messageInput.addEventListener('focus', () => {
             setTimeout(scrollToBottom, 300);
         });

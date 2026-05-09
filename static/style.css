@@ -64,9 +64,9 @@ html, body {
 
 .connection-status {
     font-size: 0.75rem;
-    color: var(--text-secondary);
+    color: #FFFFFF;
     padding: 0.25rem 0.75rem;
-    background-color: var(--bg-secondary);
+    background-color: #666;
     border-radius: 20px;
 }
 
@@ -206,6 +206,26 @@ html, body {
         opacity: 1;
         transform: translateY(0);
     }
+}
+
+@keyframes typingPulse {
+    0% {
+        opacity: 0.45;
+        transform: scale(0.98);
+    }
+    50% {
+        opacity: 1;
+        transform: scale(1);
+    }
+    100% {
+        opacity: 0.45;
+        transform: scale(0.98);
+    }
+}
+
+.typing-bubble {
+    letter-spacing: 0.18em;
+    animation: typingPulse 1s ease-in-out infinite;
 }
 
 .message.sent .message-bubble {

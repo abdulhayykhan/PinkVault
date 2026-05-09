@@ -51,7 +51,7 @@ class ConnectionManager:
     """Manage active WebSocket connections and broadcasting.
 
     Attributes:
-        active_connections: A list of accepted WebSocket connections.
+        active_connections: A map of authenticated username to WebSocket.
     """
 
     def __init__(self) -> None:
@@ -60,35 +60,40 @@ class ConnectionManager:
         Returns:
             None
         """
-        self.active_connections: list[WebSocket] = []
+        self.active_connections: dict[str, WebSocket] = {}
 
-    async def connect(self, websocket: WebSocket) -> None:
-        """Accept and register a WebSocket connection.
+    async def connect(self, websocket: WebSocket, username: str) -> None:
+        """Register an authenticated WebSocket connection.
 
         Args:
             websocket: The incoming WebSocket connection.
-
-        Returns:
-            None
-
-        Raises:
-            RuntimeError: Propagates WebSocket accept failures.
-        """
-        await websocket.accept()
-        self.active_connections.append(websocket)
-
-    async def disconnect(self, websocket: WebSocket) -> None:
-        """Remove a WebSocket connection if it is tracked.
-
-        Args:
-            websocket: The WebSocket connection to remove.
+            username: Authenticated username for this connection.
 
         Returns:
             None
         """
         await asyncio.sleep(0)
-        if websocket in self.active_connections:
-            self.active_connections.remove(websocket)
+        self.active_connections[username] = websocket
+
+    async def disconnect(self, username: str) -> None:
+        """Remove a WebSocket connection by authenticated username.
+
+        Args:
+            username: Authenticated username to remove.
+
+        Returns:
+            None
+        """
+        await asyncio.sleep(0)
+        if username:
+            self.active_connections.pop(username, None)
+
+    async def broadcast_presence(self) -> None:
+        """Broadcast online users to all connected clients."""
+        await self.broadcast(json.dumps({
+            "type": "presence",
+            "users": list(self.active_connections.keys()),
+        }))
 
     async def broadcast(self, message: str) -> None:
         """Send a text message to every connected client.
@@ -102,7 +107,7 @@ class ConnectionManager:
         Raises:
             RuntimeError: Propagates send failures from individual sockets.
         """
-        for connection in self.active_connections:
+        for connection in self.active_connections.values():
             try:
                 await connection.send_text(message)
             except Exception:
@@ -215,6 +220,14 @@ async def handle_chat_payload(message_payload: dict[str, Any], authenticated_use
     """Process a WebSocket payload for a message or reaction."""
     payload_type = str(message_payload.get("type", "message")).strip().lower()
 
+    if payload_type == "typing":
+        await manager.broadcast(json.dumps({
+            "type": "typing",
+            "sender": authenticated_user,
+            "is_typing": bool(message_payload.get("is_typing", False)),
+        }))
+        return
+
     if payload_type == "like":
         try:
             message_id = str(message_payload.get("message_id", "")).strip()
@@ -231,7 +244,7 @@ async def handle_chat_payload(message_payload: dict[str, Any], authenticated_use
             if not updated_message:
                 return
 
-            print(f"[BACKEND] Supabase updated successfully.", flush=True)
+            print("[BACKEND] Supabase updated successfully.", flush=True)
             await manager.broadcast(json.dumps({
                 "type": "like",
                 "message_id": updated_message.get("id", message_id),
@@ -337,7 +350,7 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
     keep_alive_task: asyncio.Task[None] | None = None
     authenticated_user = ""
 
-    await manager.connect(websocket)
+    await websocket.accept()
 
     try:
         authenticated_user = (await websocket.receive_text()).strip().lower()
@@ -346,6 +359,9 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
         if authenticated_user not in ALLOWED_USERS:
             await websocket.close(code=4403, reason="username not allowed")
             return
+
+        await manager.connect(websocket, authenticated_user)
+        await manager.broadcast_presence()
 
         keep_alive_task = asyncio.create_task(keep_alive(websocket))
 
@@ -363,7 +379,8 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
     except WebSocketDisconnect:
         pass
     finally:
-        await manager.disconnect(websocket)
+        await manager.disconnect(authenticated_user)
+        await manager.broadcast_presence()
         if keep_alive_task is not None:
             keep_alive_task.cancel()
             with suppress(asyncio.CancelledError):
