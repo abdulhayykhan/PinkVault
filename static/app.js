@@ -188,18 +188,26 @@ function handleWebSocketMessage(event) {
         }
 
         if (data.type === "like") {
-            const bubble = document.querySelector(`[data-id="${data.message_id}"]`);
-            if (bubble) {
-                // Remove existing badge
-                const oldBadge = bubble.querySelector('.reaction-badge');
-                if (oldBadge) oldBadge.remove();
+            // Force string conversion to match DOM attribute exactly
+            const targetId = String(data.message_id).trim();
+            const bubble = document.querySelector(`.message-bubble[data-id="${targetId}"]`);
 
-                // Add new badge if reactions exist
-                const emojis = Object.values(data.reactions).join('');
-                if (emojis) {
-                    const badgeHtml = `<div class="reaction-badge">${emojis}</div>`;
-                    bubble.insertAdjacentHTML('beforeend', badgeHtml);
-                }
+            if (!bubble) {
+                console.error(`[UI ERROR] No bubble found for ID: ${targetId}`);
+                return;
+            }
+
+            const oldBadge = bubble.querySelector('.reaction-badge');
+            if (oldBadge) oldBadge.remove();
+
+            const emojis = Object.values(data.reactions || {}).join('');
+            if (emojis) {
+                const badge = document.createElement('div');
+                badge.className = 'reaction-badge';
+                badge.textContent = emojis;
+                // Append directly to the bubble
+                bubble.appendChild(badge);
+                console.log(`[UI] Badge injected into bubble ${targetId}`);
             }
             return;
         }
@@ -604,7 +612,7 @@ function renderMessage(msg) {
     bubbleDiv.className = "message-bubble";
     // Ensure data-id is set immediately (use raw msg.id)
     bubbleDiv.setAttribute('data-id', msg.id);
-    bubbleDiv.setAttribute('data-reactions', JSON.stringify(reactions || {}));
+    bubbleDiv.setAttribute('data-reactions', JSON.stringify(msg.reactions || {}));
     console.log('[DOM] Bubble created with ID:', msg.id);
     bubbleDiv.innerHTML = formatMessage(cleanText);
 
