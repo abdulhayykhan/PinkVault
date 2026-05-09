@@ -5,9 +5,16 @@ A real-time encrypted chat application.
 ## Architecture
 
 * **Backend & Frontend Host**: FastAPI on Render. Handles HTTP endpoints, WebSocket server, and serves the static frontend.
-* **Database**: Supabase PostgreSQL. Stores encrypted messages.
+* **Database**: Supabase PostgreSQL. Stores encrypted messages and reactions.
 * **Frontend**: Vanilla JavaScript SPA. No build tools.
 * **Security**: Client-side AES encryption via CryptoJS.
+
+## Features
+
+* **Real-time Messaging**: Instant encrypted communication via WebSockets.
+* **Emoji Reactions**: Support for real-time reactions including a double-tap to heart feature and an Instagram-style long-press/right-click emoji picker.
+* **PWA Support**: Installable as a native-like application on mobile and desktop.
+* **URL Recognition**: Automatic detection and formatting of clickable links in messages.
 
 ## Security
 
@@ -24,37 +31,38 @@ cd PinkVault
 
 ```
 
-2. **Setup virtual environment**:
 
+2. **Setup virtual environment**:
 ```bash
 python -m venv venv
 source venv/bin/activate  # Windows: venv\Scripts\activate
 
 ```
 
-3. **Install dependencies**:
 
+3. **Install dependencies**:
 ```bash
 pip install -r requirements.txt
 
 ```
 
+
 4. **Configure environment variables**:
 Create `.env` in the root:
-
 ```env
-SUPABASE_URL=[https://your-project-id.supabase.co](https://your-project-id.supabase.co)
+SUPABASE_URL=https://your-project-id.supabase.co
 SUPABASE_KEY=your-anon-key-here
 ALLOWED_USERS=user1,user2
 
 ```
 
-5. **Run application**:
 
+5. **Run application**:
 ```bash
 uvicorn main:app --reload
 
 ```
+
 
 6. **Access UI**:
 Open `http://localhost:8000/`.
@@ -72,12 +80,12 @@ Open `http://localhost:8000/`.
 ## API Endpoints
 
 * `GET /health`: Returns 200 OK.
-* `GET /history`: Returns full chat history as JSON `[{"sender": "...", "encrypted_text": "..."}]`.
+* `GET /history`: Returns full chat history as JSON.
 * `GET /`: Serves static frontend.
-* `WebSocket /ws`: Real-time messaging.
+* `WebSocket /ws`: Real-time messaging and reaction handling.
 * Handshake requires plaintext username first.
-* Validated against `ALLOWED_USERS`. Invalid connections drop with code 4403.
-* Payload: `{"sender": "user", "text": "<AES-encrypted payload>"}`.
+* Validated against `ALLOWED_USERS`.
+* Payload Types: `message`, `like`, `ping`.
 
 
 
@@ -85,14 +93,15 @@ Open `http://localhost:8000/`.
 
 ```text
 PinkVault/
-├── main.py              # FastAPI app & WebSocket logic
-├── db.py                # Supabase client
-├── requirements.txt     # Python deps
+├── main.py              # FastAPI app, WebSocket logic & reaction handling
+├── db.py                # Supabase client factory
+├── requirements.txt     # Python dependencies
+├── schema.sql           # Database table and index definitions
 ├── static/
-│   ├── index.html       # SPA shell
-│   ├── style.css        # Mobile-first UI
-│   ├── app.js           # Client logic & encryption
-│   ├── sw.js            # PWA Service Worker
+│   ├── index.html       # SPA shell & emoji picker markup
+│   ├── style.css        # Mobile-first UI & reaction animations
+│   ├── app.js           # Encryption, WebSocket client & UI logic
+│   ├── sw.js            # PWA Service Worker (Network-first for JS/CSS)
 │   ├── manifest.json    # PWA metadata
 │   └── logo.png         # App icon
 
@@ -104,5 +113,4 @@ This project is open-source and available for educational and commercial use und
 
 ---
 
-**Made with ❤️ by [Abdul Hayy Khan]**(https://www.linkedin.com/in/abdulhayykhan/)
-
+**Made with ❤️ by [Abdul Hayy Khan**](https://www.linkedin.com/in/abdulhayykhan/)

@@ -85,23 +85,16 @@ function decryptMessage(ciphertext) {
             return "[Empty message]";
         }
 
-        // Log input for debugging
-        console.log("[DEBUG] Decrypting ciphertext length:", ciphertext.length);
-        console.log("[DEBUG] Using SYMMETRIC_KEY:", SYMMETRIC_KEY.substring(0, 10) + "...");
 
         const decrypted = CryptoJS.AES.decrypt(ciphertext, SYMMETRIC_KEY);
         const plaintext = decrypted.toString(CryptoJS.enc.Utf8);
 
         if (!plaintext || plaintext.trim().length === 0) {
-            console.error("[DEBUG] Decryption produced empty plaintext. Key mismatch suspected.");
             return "[Decryption Error: Check Key]";
         }
 
-        console.log("[DEBUG] Decryption successful. Plaintext length:", plaintext.length);
         return plaintext;
     } catch (error) {
-        console.error("[DEBUG] Decryption exception:", error);
-        console.error("[DEBUG] Ciphertext was:", ciphertext.substring(0, 50) + "...");
         return "[Decryption Error: Check Key]";
     }
 }
@@ -144,7 +137,6 @@ function connect() {
     try {
         ws = new WebSocket(wsUrl);
 
-        ws.onopen = handleWebSocketOpen;
         ws.onmessage = handleWebSocketMessage;
         ws.onerror = handleWebSocketError;
         ws.onclose = handleWebSocketClose;
@@ -181,7 +173,6 @@ function handleWebSocketOpen() {
 function handleWebSocketMessage(event) {
     try {
         const data = JSON.parse(event.data);
-        console.log("[WS RECV]", data);
 
         if (data.type === "ping") {
             return;
@@ -190,11 +181,9 @@ function handleWebSocketMessage(event) {
         if (data.type === "like") {
             // Force string conversion to match DOM attribute exactly
             const targetId = String(data.message_id).trim();
-            console.log("[DOM] Looking for bubble with ID:", targetId);
             const bubble = document.querySelector(`.message-bubble[data-id="${targetId}"]`);
 
             if (!bubble) {
-                console.error(`[UI ERROR] No bubble found for ID: ${targetId}`);
                 return;
             }
 
@@ -218,11 +207,9 @@ function handleWebSocketMessage(event) {
         const messageId = data.id;
         const reactions = data.reactions || {};
 
-        console.log("[DEBUG] WebSocket message received - sender:", sender, "encrypted length:", encryptedText.length);
 
         const decryptedText = decryptMessage(encryptedText);
 
-        console.log("[DEBUG] Decrypted to:", decryptedText.substring(0, 50));
 
         renderMessage({
             id: messageId,
@@ -429,7 +416,6 @@ function sendReaction(messageId, emoji) {
         sender: currentUser,
         emoji: emoji || "❤️",
     };
-    console.log("[WS SEND]", likePayload);
     ws.send(JSON.stringify(likePayload));
 }
 
@@ -517,16 +503,13 @@ function bindReactionPickerInteractions() {
         if (tapLength < 300 && tapLength > 0) {
             clearTimeout(pressTimer);
             e.preventDefault();
-            console.log("[EVENT] Double tap detected on ID:", messageId);
 
             const finalId = bubble.getAttribute('data-id');
             const payload = { type: 'like', message_id: finalId, sender: currentUser, emoji: '❤️' };
-            console.log('[WS SEND]', payload);
             if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(payload));
         } else {
             // Long Press (Hold for 500ms)
             pressTimer = setTimeout(() => {
-                console.log('[EVENT] Long press detected on ID:', messageId);
                 activeMessageId = messageId;
                 try { if (navigator.vibrate) navigator.vibrate(50); } catch(err){}
 
@@ -551,7 +534,6 @@ function bindReactionPickerInteractions() {
 
         e.preventDefault();
         const messageId = bubble.getAttribute('data-id');
-        console.log('[EVENT] Right-click detected on ID:', messageId);
         activeMessageId = messageId;
 
         picker.style.position = 'fixed';
@@ -569,7 +551,6 @@ function bindReactionPickerInteractions() {
                 const bubble = document.querySelector(`.message-bubble[data-id="${activeMessageId}"]`);
                 const finalId = bubble ? bubble.getAttribute('data-id') : activeMessageId;
                 const payload = { type: 'like', message_id: finalId, sender: currentUser, emoji: emoji };
-                console.log('[WS SEND]', payload);
                 if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(payload));
                 picker.classList.remove('show');
             }
@@ -602,7 +583,6 @@ function renderMessage(msg) {
 
     // Validate and clean the text
     const cleanText = text;
-    console.log("[DEBUG] renderMessage called - sender:", sender, "text:", cleanText.substring(0, 50));
 
     const messageDiv = document.createElement("div");
     messageDiv.className = `message ${isSent ? "sent" : "received"}`;
@@ -612,7 +592,6 @@ function renderMessage(msg) {
     // Ensure data-id is set immediately (use raw msg.id)
     bubbleDiv.setAttribute('data-id', msg.id);
     bubbleDiv.setAttribute('data-reactions', JSON.stringify(msg.reactions || {}));
-    console.log('[DOM] Bubble created with ID:', msg.id);
     bubbleDiv.innerHTML = formatMessage(cleanText);
 
     // Apply badge immediately if reactions exist
@@ -689,20 +668,14 @@ async function loadChatHistory() {
         }
 
         const messages = await response.json();
-        console.log("[DEBUG] Loaded", messages.length, "messages from history");
 
         // Render each message
         messages.forEach((msg, index) => {
             const sender = msg.sender || "unknown";
             const encryptedText = msg.encrypted_text || "";
 
-            console.log("[DEBUG] History message", index, ": sender=", sender, "encryptedText length=", encryptedText.length);
 
             const decryptedText = decryptMessage(encryptedText);
-
-            if (!decryptedText || decryptedText.includes("Error")) {
-                console.warn("[DEBUG] Decryption failed for message", index);
-            }
 
             renderMessage({
                 id: msg.id,
@@ -901,7 +874,6 @@ function handleUnlock(event) {
  * @returns {void}
  */
 function registerServiceWorker() {
-    if ("serviceWorker" in navigator) {
         navigator.serviceWorker.register("sw.js")
             .then((registration) => {
                 console.log("Service Worker registered:", registration);
