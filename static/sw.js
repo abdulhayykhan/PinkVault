@@ -1,5 +1,5 @@
 // Service Worker for PinkVault Chat PWA
-const CACHE_NAME = 'pinkvault-v1';
+const CACHE_NAME = 'pinkvault-v2';
 const URLS_TO_CACHE = [
     '/',
     '/index.html',
@@ -37,16 +37,34 @@ self.addEventListener('activate', event => {
     );
 });
 
-// Fetch event: Network-first for APIs, Cache-first for static assets
+// Fetch event: Network-first for critical app assets, Cache-first for everything else
 self.addEventListener('fetch', event => {
     // Network-only for API endpoints and non-GET requests
     const url = event.request.url;
     const isApiEndpoint = url.includes('/history') || url.includes('/ws');
     const isNonGetRequest = event.request.method !== 'GET';
+    const isAppAsset = url.includes('/app.js') || url.includes('/style.css');
 
     if (isApiEndpoint || isNonGetRequest) {
         // Bypass cache entirely for API endpoints
         event.respondWith(fetch(event.request));
+        return;
+    }
+
+    if (isAppAsset) {
+        event.respondWith(
+            fetch(event.request)
+                .then(response => {
+                    if (!response || response.status !== 200 || response.type === 'error') {
+                        throw new Error('Network response was not ok');
+                    }
+
+                    const responseToCache = response.clone();
+                    caches.open(CACHE_NAME).then(cache => cache.put(event.request, responseToCache));
+                    return response;
+                })
+                .catch(() => caches.match(event.request))
+        );
         return;
     }
 

@@ -166,7 +166,7 @@ async def save_message(sender: str, encrypted_text: str) -> dict[str, Any]:
         return {}
 
 
-async def toggle_message_reaction(message_id: int, sender: str, emoji: str) -> dict[str, Any]:
+async def toggle_message_reaction(message_id: str, sender: str, emoji: str) -> dict[str, Any]:
     """Toggle a sender's reaction for a stored message.
 
     Args:
@@ -217,14 +217,12 @@ async def handle_chat_payload(message_payload: dict[str, Any], authenticated_use
 
     if payload_type == "like":
         try:
-            message_id_raw = message_payload.get("message_id")
+            message_id = str(message_payload.get("message_id", "")).strip()
             sender = str(message_payload.get("sender", authenticated_user)).strip().lower()
             if sender != authenticated_user:
                 sender = authenticated_user
 
-            try:
-                message_id = int(message_id_raw)
-            except (TypeError, ValueError):
+            if not message_id:
                 return
 
             emoji = str(message_payload.get("emoji", "❤️"))

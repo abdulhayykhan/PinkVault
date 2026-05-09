@@ -190,6 +190,7 @@ function handleWebSocketMessage(event) {
         if (data.type === "like") {
             // Force string conversion to match DOM attribute exactly
             const targetId = String(data.message_id).trim();
+            console.log("[DOM] Looking for bubble with ID:", targetId);
             const bubble = document.querySelector(`.message-bubble[data-id="${targetId}"]`);
 
             if (!bubble) {
